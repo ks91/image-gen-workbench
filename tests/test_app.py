@@ -83,6 +83,54 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.engine.calls[0][1].size, (32, 32))
         self.assertEqual(self.engine.calls[1][1].size, (256, 256))
 
+    def test_batch_seeds_and_selecting_an_output(self):
+        source = self.upload()
+        response = self.submit(num_images=3, seed=2**32-1, source_id=source)
+        self.assertEqual(response.status_code, 202)
+        ids = response.json['job_ids']
+        self.assertEqual(len(set(ids)), 3)
+        results = [self.finish(i) for i in ids]
+        self.assertEqual([j['spec']['seed'] for j in results], [2**32-1, 0, 1])
+        self.assertEqual(len({j['batch_id'] for j in results}), 1)
+        self.assertEqual([j['batch_index'] for j in results], [1, 2, 3])
+        for j in results:
+            self.assertEqual(j['status'], 'succeeded')
+            self.assertEqual(j['batch_size'], 3)
+            self.assertEqual(j['spec']['source_id'], source)
+            image = self.client.get(j['image_url'])
+            with Image.open(io.BytesIO(image.data)) as png:
+                import json
+                self.assertEqual(json.loads(png.info['generation'])['seed'], j['spec']['seed'])
+            image.close()
+        chosen = self.finish(self.submit(source_id=ids[1]).json['id'])
+        self.assertEqual(chosen['spec']['source_id'], ids[1])
+        self.assertEqual(self.engine.calls[-1][1].size, (256, 256))
+
+    def test_invalid_batch_size_creates_no_jobs(self):
+        for count in (0, 9, -1, True, 1.5, '2', None):
+            with self.subTest(count=count):
+                self.assertEqual(self.submit(num_images=count).status_code, 400)
+        self.assertEqual(self.client.get('/api/jobs').json, [])
+
+    def test_batch_queue_limit_is_atomic(self):
+        started, release = threading.Event(), threading.Event()
+        original = self.engine.generate
+        def blocking(*args):
+            started.set()
+            release.wait(5)
+            return original(*args)
+        self.engine.generate = blocking
+        try:
+            self.submit(num_images=8)
+            self.assertTrue(started.wait(2))
+            self.submit(num_images=8)
+            rejected = self.submit(num_images=8)
+            self.assertEqual(rejected.status_code, 400)
+            self.assertEqual(rejected.json['error_key'], 'error_queue')
+            self.assertEqual(len(self.client.get('/api/jobs').json), 16)
+        finally:
+            release.set()
+
     def test_invalid_parameters_never_reach_engine(self):
         for changes in ({'prompt': ''}, {'width': 257}, {'steps': 0}, {'seed': -1},
                         {'source_id': '../../secret'}, {'cfg': float('nan')},

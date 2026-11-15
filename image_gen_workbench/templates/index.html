@@ -31,11 +31,14 @@
       <p class="hint">{{ tr('source_hint') }}</p>
       <details><summary>{{ tr('settings') }}</summary>
         <div class="fields"><div><label for="width">{{ tr('width') }}</label><input id="width" type="number" min="256" max="2048" step="32" value="1024" required></div><div><label for="height">{{ tr('height') }}</label><input id="height" type="number" min="256" max="2048" step="32" value="1024" required></div></div>
-        <div class="fields"><div><label for="steps">{{ tr('steps') }}</label><input id="steps" type="number" min="1" max="100" value="28" required></div><div><label for="cfg">CFG</label><input id="cfg" type="number" min="1" max="10" step="0.1" value="3.5" required></div></div>
+        <div class="fields"><div><label for="steps">{{ tr('steps') }}</label><input id="steps" type="number" min="1" max="100" value="12" required></div><div><label for="cfg">CFG</label><input id="cfg" type="number" min="1" max="10" step="0.1" value="1" required></div></div>
         <label for="seed">Seed {{ tr('random_hint') }}</label><input id="seed" type="number" min="0" max="4294967295" data-i18n-placeholder="random" placeholder="{{ t('random') }}">
         <label for="negative_prompt">{{ tr('negative_prompt') }}</label><textarea id="negative_prompt" rows="2" maxlength="12000" data-i18n-placeholder="negative_hint" placeholder="{{ t('negative_hint') }}"></textarea>
         <p class="hint">{{ tr('seed_hint') }}</p>
       </details>
+      <label for="num_images">{{ tr('num_images') }}</label>
+      <input id="num_images" type="number" min="1" max="8" value="1" required>
+      <p class="hint">{{ tr('batch_hint') }}</p>
       <button id="generate" class="primary" type="submit">{{ tr('generate') }} <span>↗</span></button>
       <p class="hint">{{ tr('loading_hint') }}</p>
     </form>

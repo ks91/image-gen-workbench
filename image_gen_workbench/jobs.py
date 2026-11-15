@@ -29,7 +29,7 @@ def validate_spec(data):
     if not spec['prompt']:
         raise UserError('error_prompt')
     for key, default, low, high in [('width', 1024, 256, 2048), ('height', 1024, 256, 2048),
-                                   ('steps', 28, 1, 100), ('seed', None, 0, 2**32 - 1)]:
+                                   ('steps', 12, 1, 100), ('seed', None, 0, 2**32 - 1)]:
         value = data.get(key, default)
         if key == 'seed' and value is None:
             value = secrets.randbelow(2**32)
@@ -38,7 +38,7 @@ def validate_spec(data):
         if key in ('width', 'height') and value % 32:
             raise UserError('error_dimensions')
         spec[key] = value
-    cfg = data.get('cfg', 3.5)
+    cfg = data.get('cfg', 1)
     if type(cfg) not in (int, float) or not math.isfinite(cfg) or not 1 <= cfg <= 10:
         raise UserError('error_cfg')
     spec['cfg'] = cfg
@@ -119,23 +119,36 @@ class Jobs:
 
     def submit(self, data):
         spec = validate_spec(data)
+        count = data.get('num_images', 1)
+        if type(count) is not int or not 1 <= count <= 8:
+            raise UserError('error_integer', field='num_images', low=1, high=8)
         if spec['source_id']:
             try:
                 self.image_path(spec['source_id'])
             except KeyError:
                 raise UserError('error_source_missing') from None
         with self.lock:
-            if sum(not e.is_set() for e in self.events.values()) >= 20:
+            if sum(not e.is_set() for e in self.events.values()) + count > 20:
                 raise UserError('error_queue')
-            job_id = uuid.uuid4().hex
-            job = dict(id=job_id, spec=spec, status='queued', created_at=time.time(),
-                       progress=0, phase='phase_queued', error=None, image_url=None,
-                       favorite=False, notes='', engine=self.engine.name)
+            batch_id = uuid.uuid4().hex
+            batch = []
+            for index in range(count):
+                job = dict(id=uuid.uuid4().hex,
+                           spec={**spec, 'seed': (spec['seed'] + index) % 2**32},
+                           batch_id=batch_id, batch_index=index + 1, batch_size=count,
+                           status='queued', created_at=time.time(), progress=0,
+                           phase='phase_queued', error=None, image_url=None,
+                           favorite=False, notes='', engine=self.engine.name)
+                batch.append(job)
+            # Persist the entire batch before making any item available to the worker.
             with self.connect() as db:
-                db.execute('INSERT INTO jobs VALUES (?,?)', (job_id, json.dumps(job, ensure_ascii=False)))
-            self.events[job_id] = threading.Event()
-            self.queue.put(job_id)
-        return job
+                db.executemany('INSERT INTO jobs VALUES (?,?)',
+                               [(job['id'], json.dumps(job, ensure_ascii=False)) for job in batch])
+            for job in batch:
+                self.events[job['id']] = threading.Event()
+                self.queue.put(job['id'])
+        # Preserve the original single-job response fields for existing clients.
+        return {**batch[0], 'job_ids': [job['id'] for job in batch]}
 
     def cancel(self, job_id):
         with self.lock:

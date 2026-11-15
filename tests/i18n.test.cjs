@@ -105,3 +105,36 @@ test('progress and API error notices translate immediately in both directions', 
   h.switchTo('en');
   assert.equal(h.nodes.notice.textContent, 'Enter a prompt.');
 });
+
+
+test('batch editing preserves the chosen source but requests a fresh seed', async () => {
+  const selected = {...job, batch_id: 'b'.repeat(32), batch_size: 4, batch_index: 2};
+  const h = harness([selected]); await settled();
+  h.nodes.num_images.value = '4';
+  h.switchTo('ja');
+  assert.equal(h.nodes.num_images.value, '4');
+  h.switchTo('en');
+  await h.find('button', 'Edit this image').onclick();
+  assert.equal(h.nodes.num_images.value, 1);
+  h.nodes.num_images.value = '3';
+  await h.nodes['generate-form'].onsubmit({preventDefault() {}});
+  const request = h.requests.find(r => r.options.method === 'POST');
+  const spec = JSON.parse(request.options.body);
+  assert.equal(spec.num_images, 3);
+  assert.equal(spec.source_id, selected.id);
+  assert.equal(spec.seed, null);
+  assert.equal(h.nodes.notice.textContent, 'Queued 3 image(s).');
+  assert.ok(h.find('p', 'Batch bbbbbbbb · Image 2/4'));
+});
+
+
+test('reuse keeps the seed for repeatable experiments, while editing clears it', async () => {
+  const h = harness([job]); await settled();
+  await h.find('button', 'Reuse settings').onclick();
+  assert.equal(Number(h.nodes.seed.value), job.spec.seed);
+  await h.find('button', 'Edit this image').onclick();
+  assert.equal(h.nodes.seed.value, '');
+  assert.equal(h.nodes['source-preview'].src, `/images/${job.id}.png`);
+  h.switchTo('ja');
+  assert.equal(h.nodes.seed.value, '');
+});

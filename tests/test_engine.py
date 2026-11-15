@@ -37,11 +37,12 @@ class EngineTests(unittest.TestCase):
         kwargs = pipeline.call_args.kwargs
         self.assertIs(kwargs['image'], image)
         self.assertEqual(kwargs['negative_prompt'], '')
-        self.assertEqual(kwargs['true_cfg_scale'], 3.5)
+        self.assertEqual(kwargs['true_cfg_scale'], 1)
+        self.assertEqual(kwargs['num_inference_steps'], 12)
         self.assertNotIn('strength', kwargs)
         latent = {'latents': object()}
         self.assertIs(kwargs['callback_on_step_end'](pipeline, 3, None, latent), latent)
-        progress.assert_called_with(4, 28)
+        progress.assert_called_with(4, 12)
 
     def test_cancellation_after_loading_prevents_inference(self):
         engine = QwenEngine()

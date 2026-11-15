@@ -33,7 +33,7 @@
     "demo": "DEMO (no model)",
     "submitted": "Generation queued. Follow its progress in your history.",
     "reused": "Settings restored. Adjust the prompt and generate again.",
-    "editing": "Source image selected. Describe what you want to change in the prompt.",
+    "editing": "Selected this image as the source. Seed reset to random to avoid reusing the source image’s initial noise. Enter your editing instructions.",
     "favorite_add": "Add to favorites",
     "favorite_remove": "Remove from favorites",
     "elapsed": "{seconds} s",
@@ -80,7 +80,11 @@
     "phase_cancelling": "Cancelling",
     "phase_succeeded": "Completed",
     "phase_cancelled": "Cancelled",
-    "phase_failed": "Failed"
+    "phase_failed": "Failed",
+    "num_images": "Number of images",
+    "batch_hint": "Generate 1–8 variations sequentially with different seeds. Compare results, then choose “Edit this image” to continue.",
+    "batch_submitted": "Queued {count} image(s).",
+    "batch_result": "Batch {batch} · Image {index}/{total}"
   },
   "ja": {
     "tagline": "試して、比べて、イメージに近づける。",
@@ -116,7 +120,7 @@
     "demo": "DEMO (モデル未使用)",
     "submitted": "生成を受け付けました。履歴に進捗を表示します。",
     "reused": "設定を再利用しました。プロンプトを調整して生成できます。",
-    "editing": "この画像を元に編集します。変更したい内容をプロンプトに入力してください。",
+    "editing": "この画像を編集元に選択しました。元画像の初期ノイズの再利用を避けるため、seed をランダムに戻しました。編集指示を入力してください。",
     "favorite_add": "お気に入りに追加",
     "favorite_remove": "お気に入りを解除",
     "elapsed": "{seconds} 秒",
@@ -163,6 +167,10 @@
     "phase_cancelling": "キャンセルを処理中",
     "phase_succeeded": "完了",
     "phase_cancelled": "キャンセル済み",
-    "phase_failed": "失敗"
+    "phase_failed": "失敗",
+    "num_images": "生成する枚数",
+    "batch_hint": "異なる seed で 1〜8 枚を順番に生成します。結果を比較し、「この画像を編集」で続きを作れます。",
+    "batch_submitted": "{count} 枚の生成を予約しました。",
+    "batch_result": "バッチ {batch} · {index}/{total} 枚目"
   }
 }

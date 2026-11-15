@@ -4,6 +4,7 @@ A local image generation and editing workbench powered by **Qwen-Image-2.1**, wi
 
 ## Features
 
+- Generate 1–8 variations per submission with different seeds and choose a result to refine.
 - Text-to-image generation and instruction-based image editing.
 - Upload a source image or continue editing any generated image.
 - Reuse prompts, seeds, and generation settings for iterative experiments.
@@ -79,13 +80,21 @@ Switching languages updates labels, history actions, progress, and application e
 
 ## Workflow
 
-1. Enter a prompt and select **Generate image**.
+1. Enter a prompt, set **Number of images** (1–8), and select **Generate image**.
 2. Select **Reuse settings** to retain the seed and settings while experimenting with the prompt. Leave the seed blank to generate a new random seed, which is recorded in the history.
 3. Upload a source image or select **Edit this image** on a result. Describe the desired change, such as “change the background to sunset.” You can use the edited result as the source for another edit.
 4. Select **Compare** on up to two results to view them side by side. Use favorites and notes to track promising results and ideas.
 5. Select **Save PNG** to download an image. The PNG `generation` text metadata also contains the prompt and generation settings.
 
+**Use a different seed when editing a generated image.** Qwen-Image-2.1 can produce an oversaturated, over-sharpened near-copy and ignore edits when the starting noise used to create the reference is replayed (same random generator, seed, and output dimensions). **Edit this image** therefore clears the seed field to request a new random seed. **Reuse settings** retains the recorded seed for repeatable experiments. When uploading a previously generated image or entering a seed manually, avoid its original generation seed. See the [Qwen report](https://github.com/QwenLM/Qwen-Image-2.1/issues/9) and [Diffusers investigation](https://github.com/huggingface/diffusers/issues/14824). Changing seeds addresses this particular failure mode, not every possible editing artifact.
+
 The Qwen-Image-2.1 image input supports instruction-based editing. This pipeline does not expose a conventional img2img `strength` parameter, so the interface does not provide one. Width and height must be multiples of 32 between 256 and 2048. Negative prompts are passed even when empty; CFG is enabled when its value is greater than 1. A fixed seed helps compare experiments, but results can vary across environments.
+
+Each batch uses the same prompt, settings, and optional source image. Seeds start at your specified seed (or a random seed when blank) and increase by one, wrapping after 4294967295. Each result records its own seed and batch label and can be independently compared, downloaded, cancelled, or edited. Reusing settings or choosing an image to edit resets the image count to one; increase it again for more variations. The queue accepts at most 20 active images and rejects an entire batch if it would exceed that limit.
+
+The default settings are **12 inference steps and CFG 1**. CFG 1 disables classifier-free guidance, so negative prompts have no effect at that setting.
+
+For faster previews, try fewer inference steps (for example, compare 12, 20, and 28 with the same seed) or smaller dimensions. Fewer steps generally reduce denoising time but can reduce detail and prompt fidelity; these example counts are not quality guarantees. Loading, prompt processing, and image decoding add fixed overhead. Multiple images are generated sequentially to limit peak memory usage, so requesting more images increases total time rather than accelerating inference.
 
 Jobs run sequentially. Cancellation is checked between generation steps; model loading and prompt processing cannot be stopped immediately. Jobs left unfinished when the server exits are marked as interrupted on the next launch, so you can reuse their settings and try again.
 

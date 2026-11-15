@@ -68,16 +68,17 @@ $('generate-form').onsubmit = async event => {
   event.preventDefault(); $('generate').disabled = true;
   try {
     const spec = { prompt: $('prompt').value, negative_prompt: $('negative_prompt').value, source_id: sourceId };
-    for (const key of ['width', 'height', 'steps', 'cfg']) spec[key] = Number($(key).value);
+    for (const key of ['width', 'height', 'steps', 'cfg', 'num_images']) spec[key] = Number($(key).value);
     spec.seed = $('seed').value === '' ? null : Number($('seed').value);
     await api('/api/jobs', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(spec) });
-    notice('submitted');
+    notice('batch_submitted', {count: spec.num_images});
     await refresh(true);
   } catch (error) { reportError(error); }
   finally { $('generate').disabled = false; }
 };
 function reuse(job) {
   for (const key of ['prompt', 'negative_prompt', 'width', 'height', 'steps', 'cfg', 'seed']) $(key).value = job.spec[key];
+  $('num_images').value = 1;
   setSource(job.spec.source_id);
   $('prompt').focus();
   notice('reused');
@@ -123,6 +124,7 @@ function render() {
       }));
     top.lastChild.setAttribute('aria-label', t(job.favorite ? 'favorite_remove' : 'favorite_add'));
     body.append(top, element('p', job.spec.prompt));
+    if (job.batch_size > 1) body.append(element('p', t('batch_result', {batch: job.batch_id.slice(0, 8), index: job.batch_index, total: job.batch_size}), 'metadata'));
     body.append(element('div', `${job.spec.width} × ${job.spec.height} · ${t('step_count', {steps: job.spec.steps})} · CFG ${job.spec.cfg}\nseed ${job.spec.seed}${job.elapsed ? ` · ${t('elapsed', {seconds: job.elapsed})}` : ''}`, 'metadata'));
     if (job.spec.source_id) {
       const parent = element('a', t('view_source'), 'text-button'); parent.href = `/images/${job.spec.source_id}.png`; parent.target = '_blank'; parent.rel = 'noopener'; body.append(parent);
@@ -131,7 +133,7 @@ function render() {
     const actions = element('div', undefined, 'actions');
     actions.append(button(t('reuse'), () => reuse(job)));
     if (job.image_url) {
-      actions.append(button(t('edit'), () => { reuse(job); setSource(job.id); notice('editing'); }),
+      actions.append(button(t('edit'), () => { reuse(job); setSource(job.id); $('seed').value = ''; notice('editing'); }),
         button(t(comparison.includes(job.id) ? 'compare_remove' : 'compare_add'), () => {
           if (comparison.includes(job.id)) comparison = comparison.filter(id => id !== job.id);
           else { if (comparison.length === 2) comparison.shift(); comparison.push(job.id); }
