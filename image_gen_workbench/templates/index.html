@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Image Gen Workbench</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ctext y='32' font-size='36' fill='%23c9edaa'%3E◈%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script id="translations" type="application/json">{{ messages | tojson }}</script>
+  <script defer src="{{ url_for('static', filename='i18n.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+</head>
+{% macro tr(key) -%}<span data-i18n="{{ key }}">{{ t(key) }}</span>{%- endmacro %}
+<body>
+<header>
+  <div><span class="mark">◈</span> <strong>Image Gen Workbench</strong><small>{{ tr('tagline') }}</small></div>
+  <div class="header-controls"><span class="model">● {% if is_demo %}{{ tr('demo') }}{% else %}{{ engine }}{% endif %}</span>
+    <label class="language-label" for="language">Language / 言語
+      <select id="language"><option value="en" {% if language == 'en' %}selected{% endif %}>English</option><option value="ja" {% if language == 'ja' %}selected{% endif %}>日本語</option></select>
+    </label>
+  </div>
+</header>
+<main>
+  <aside>
+    <div class="eyebrow">CREATE / ITERATE</div><h1>{{ tr('create') }}</h1>
+    <form id="generate-form">
+      <label for="prompt">{{ tr('prompt') }}</label>
+      <textarea id="prompt" required maxlength="12000" rows="6" data-i18n-placeholder="prompt_example" placeholder="{{ t('prompt_example') }}"></textarea>
+      <div class="source-heading"><label>{{ tr('source') }} {{ tr('optional') }}</label><button id="clear-source" type="button" class="text-button" hidden>{{ tr('clear_source') }}</button></div>
+      <label class="upload" for="upload"><span id="upload-label">{{ t('upload') }}</span><input id="upload" type="file" accept="image/*" data-i18n-aria-label="upload" aria-label="{{ t('upload') }}"></label>
+      <img id="source-preview" data-i18n-alt="source_alt" alt="{{ t('source_alt') }}" hidden>
+      <p class="hint">{{ tr('source_hint') }}</p>
+      <details><summary>{{ tr('settings') }}</summary>
+        <div class="fields"><div><label for="width">{{ tr('width') }}</label><input id="width" type="number" min="256" max="2048" step="32" value="1024" required></div><div><label for="height">{{ tr('height') }}</label><input id="height" type="number" min="256" max="2048" step="32" value="1024" required></div></div>
+        <div class="fields"><div><label for="steps">{{ tr('steps') }}</label><input id="steps" type="number" min="1" max="100" value="28" required></div><div><label for="cfg">CFG</label><input id="cfg" type="number" min="1" max="10" step="0.1" value="3.5" required></div></div>
+        <label for="seed">Seed {{ tr('random_hint') }}</label><input id="seed" type="number" min="0" max="4294967295" data-i18n-placeholder="random" placeholder="{{ t('random') }}">
+        <label for="negative_prompt">{{ tr('negative_prompt') }}</label><textarea id="negative_prompt" rows="2" maxlength="12000" data-i18n-placeholder="negative_hint" placeholder="{{ t('negative_hint') }}"></textarea>
+        <p class="hint">{{ tr('seed_hint') }}</p>
+      </details>
+      <button id="generate" class="primary" type="submit">{{ tr('generate') }} <span>↗</span></button>
+      <p class="hint">{{ tr('loading_hint') }}</p>
+    </form>
+    <div id="notice" role="status" aria-live="polite"></div>
+  </aside>
+  <section class="workspace">
+    <div class="section-heading"><div><div class="eyebrow">YOUR EXPLORATIONS</div><h2>{{ tr('history') }} <span id="count">0</span></h2></div><label class="filter"><input id="favorites" type="checkbox"> {{ tr('favorites') }}</label></div>
+    <div id="compare" hidden><div class="section-heading"><h3>{{ tr('compare_heading') }}</h3><button id="clear-compare" class="text-button">{{ tr('clear_compare') }}</button></div><div id="compare-images"></div></div>
+    <div id="empty"><div class="empty-icon">◈</div><h2>{{ tr('empty_heading') }}</h2><p>{{ tr('empty_hint') }}</p></div>
+    <div id="history"></div>
+  </section>
+</main>
+<dialog id="viewer"><button id="close-viewer" class="text-button">{{ tr('close') }}</button><img data-i18n-alt="viewer_alt" alt="{{ t('viewer_alt') }}"></dialog>
+</body>
+</html>
