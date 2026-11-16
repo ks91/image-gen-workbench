@@ -168,3 +168,10 @@ Translations are maintained in `image_gen_workbench/static/messages.json`, share
 - [Diffusers Qwen-Image-2.1 API](https://huggingface.co/docs/diffusers/en/api/pipelines/qwenimage21)
 
 The initial implementation was based on a local Qwen script that loaded the model on CPU before moving it to MPS, using 28 inference steps and CFG 3.5.
+
+
+## License
+
+Image Gen Workbench is free software, licensed under the **GNU General Public License, version 3 or (at your option) any later version** (`GPL-3.0-or-later`). You may redistribute and modify it under those terms. It is provided without any warranty, including the implied warranties of merchantability or fitness for a particular purpose. See [LICENSE](LICENSE) for the full terms.
+
+Third-party libraries and model weights retain their respective licenses; this license does not replace their terms. Generated images are not automatically covered by the application's GPL license merely because they were created with it.

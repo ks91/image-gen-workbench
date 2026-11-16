@@ -7,6 +7,8 @@ name = "image-gen-workbench"
 version = "0.1.0"
 description = "A local Qwen image generation and editing studio"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = ["Flask>=3.1,<4", "Pillow>=11,<13", "filelock>=3.16,<4"]
 
