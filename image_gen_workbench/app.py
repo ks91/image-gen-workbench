@@ -57,7 +57,16 @@ def create_app(data_dir='data', engine=None):
 
     @app.get('/api/jobs')
     def history():
-        return jsonify([present(job) for job in jobs.list()])
+        try:
+            page = int(request.args.get('page', '1'))
+        except ValueError:
+            raise UserError('error_page') from None
+        favorites = request.args.get('favorites', '0')
+        if page < 1 or favorites not in ('0', '1'):
+            raise UserError('error_page')
+        result = jobs.page(page, favorites == '1')
+        result['items'] = [present(job) for job in result['items']]
+        return jsonify(result)
 
     @app.post('/api/jobs')
     def generate():

@@ -84,7 +84,12 @@
     "num_images": "Number of images",
     "batch_hint": "Generate 1–8 variations sequentially with different seeds. Compare results, then choose “Edit this image” to continue.",
     "batch_submitted": "Queued {count} image(s).",
-    "batch_result": "Batch {batch} · Image {index}/{total}"
+    "batch_result": "Batch {batch} · Image {index}/{total}",
+    "pagination": "History pages",
+    "previous_page": "Previous",
+    "next_page": "Next",
+    "page_status": "Page {page} of {pages} · {total} total",
+    "error_page": "Use a positive integer page and favorites=0 or 1."
   },
   "ja": {
     "tagline": "試して、比べて、イメージに近づける。",
@@ -171,6 +176,11 @@
     "num_images": "生成する枚数",
     "batch_hint": "異なる seed で 1〜8 枚を順番に生成します。結果を比較し、「この画像を編集」で続きを作れます。",
     "batch_submitted": "{count} 枚の生成を予約しました。",
-    "batch_result": "バッチ {batch} · {index}/{total} 枚目"
+    "batch_result": "バッチ {batch} · {index}/{total} 枚目",
+    "pagination": "履歴のページ切り替え",
+    "previous_page": "前へ",
+    "next_page": "次へ",
+    "page_status": "{page} / {pages} ページ · 全 {total} 件",
+    "error_page": "ページは 1 以上の整数、お気に入り指定は 0 または 1 にしてください。"
   }
 }

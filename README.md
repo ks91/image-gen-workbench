@@ -10,6 +10,7 @@ A local image generation and editing workbench powered by **Qwen-Image-2.1**, wi
 - Reuse prompts, seeds, and generation settings for iterative experiments.
 - Compare two images side by side, mark favorites, and save notes.
 - Background generation with progress, cancellation, and persistent history.
+- Browse history 24 entries per page, including server-side favorites filtering.
 - Download PNGs with generation settings embedded as metadata.
 - Switch between **English and Japanese** without losing your current inputs.
 
@@ -98,6 +99,10 @@ The default settings are **12 inference steps and CFG 1**. CFG 1 disables classi
 For faster previews, try fewer inference steps (for example, compare 12, 20, and 28 with the same seed) or smaller dimensions. Fewer steps generally reduce denoising time but can reduce detail and prompt fidelity; these example counts are not quality guarantees. Loading, prompt processing, and image decoding add fixed overhead. Multiple images are generated sequentially to limit peak memory usage, so requesting more images increases total time rather than accelerating inference.
 
 Jobs run sequentially. Cancellation is checked between generation steps; model loading and prompt processing cannot be stopped immediately. Jobs left unfinished when the server exits are marked as interrupted on the next launch, so you can reuse their settings and try again.
+
+History is displayed newest first, with **24 entries per page** and Previous/Next controls. Polling retrieves only the current page. Favorites are filtered across the full history before pagination. Comparison selections and unsaved note drafts stay available when switching pages. Submitting a new generation returns to page one and clears the favorites filter so the queued results are visible. History remains live: new submissions can shift entries between pages.
+
+`GET /api/jobs?page=1&favorites=0` returns `{items, total, page, pages, page_size}` instead of the previous full-history array. The page size is fixed at 24; `favorites=1` selects favorites only. Pages beyond the end are clamped to the last page. An empty history is page 1 of 1.
 
 ## Storage and local operation
 

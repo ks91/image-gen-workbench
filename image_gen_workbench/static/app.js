@@ -1,6 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let sourceId = null, jobs = [], comparison = [], lastSignature = '';
+let page = 1, pages = 1, total = 0, requestSequence = 0;
 const noteDrafts = new Map();
 const catalog = JSON.parse($('translations').textContent);
 let language = document.documentElement.lang;
@@ -72,6 +73,7 @@ $('generate-form').onsubmit = async event => {
     spec.seed = $('seed').value === '' ? null : Number($('seed').value);
     await api('/api/jobs', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(spec) });
     notice('batch_submitted', {count: spec.num_images});
+    page = 1; $('favorites').checked = false;
     await refresh(true);
   } catch (error) { reportError(error); }
   finally { $('generate').disabled = false; }
@@ -86,9 +88,7 @@ function reuse(job) {
 function renderComparison() {
   $('compare').hidden = comparison.length === 0;
   $('compare-images').replaceChildren();
-  for (const id of comparison) {
-    const job = jobs.find(item => item.id === id);
-    if (!job) continue;
+  for (const job of comparison) {
     const figure = element('figure');
     const img = element('img'); img.src = job.image_url; img.alt = job.spec.prompt;
     figure.append(img, element('p', job.spec.prompt), element('p', `seed ${job.spec.seed} · ${t('step_count', {steps: job.spec.steps})} · CFG ${job.spec.cfg}`, 'metadata'));
@@ -96,8 +96,11 @@ function renderComparison() {
   }
 }
 function render() {
-  const visible = jobs.filter(job => !$('favorites').checked || job.favorite);
-  $('count').textContent = String(visible.length);
+  const visible = jobs;
+  $('count').textContent = String(total);
+  $('page-status').textContent = t('page_status', {page, pages, total});
+  $('prev-page').disabled = page <= 1;
+  $('next-page').disabled = page >= pages;
   $('empty').hidden = visible.length !== 0;
   $('history').replaceChildren();
   for (const job of visible) {
@@ -134,9 +137,9 @@ function render() {
     actions.append(button(t('reuse'), () => reuse(job)));
     if (job.image_url) {
       actions.append(button(t('edit'), () => { reuse(job); setSource(job.id); $('seed').value = ''; notice('editing'); }),
-        button(t(comparison.includes(job.id) ? 'compare_remove' : 'compare_add'), () => {
-          if (comparison.includes(job.id)) comparison = comparison.filter(id => id !== job.id);
-          else { if (comparison.length === 2) comparison.shift(); comparison.push(job.id); }
+        button(t(comparison.some(item => item.id === job.id) ? 'compare_remove' : 'compare_add'), () => {
+          if (comparison.some(item => item.id === job.id)) comparison = comparison.filter(item => item.id !== job.id);
+          else { if (comparison.length === 2) comparison.shift(); comparison.push(job); }
           render();
         }));
       const download = element('a', t('download')); download.href = job.image_url; download.download = `qwen-${job.id}.png`; actions.append(download);
@@ -156,14 +159,31 @@ function render() {
   renderComparison();
 }
 async function refresh(force = false) {
-  const latest = await api('/api/jobs');
-  const signature = JSON.stringify(latest);
-  // Preserve an unsaved note while the worker reports progress.
+  // Do not replace a focused note, including when a poll was already in flight.
   if (!force && document.activeElement?.classList.contains('notes')) return;
-  jobs = latest;
+  const sequence = ++requestSequence;
+  let latest;
+  try {
+    latest = await api(`/api/jobs?page=${page}&favorites=${$('favorites').checked ? 1 : 0}`);
+  } catch (error) {
+    if (sequence === requestSequence) throw error;
+    return;
+  }
+  if (sequence !== requestSequence) return;
+  if (!force && document.activeElement?.classList.contains('notes')) return;
+  const signature = JSON.stringify(latest);
+  jobs = latest.items; page = latest.page; pages = latest.pages; total = latest.total;
   if (force || signature !== lastSignature) { lastSignature = signature; render(); }
 }
-$('favorites').onchange = render;
+async function changePage(next) {
+  const previous = page;
+  page = next;
+  try { await refresh(true); }
+  catch (error) { page = previous; reportError(error); render(); }
+}
+$('prev-page').onclick = () => changePage(Math.max(1, page - 1));
+$('next-page').onclick = () => changePage(Math.min(pages, page + 1));
+$('favorites').onchange = () => changePage(1);
 $('clear-compare').onclick = () => { comparison = []; render(); };
 $('close-viewer').onclick = () => $('viewer').close();
 async function poll() {

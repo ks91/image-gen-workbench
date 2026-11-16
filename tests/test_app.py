@@ -66,11 +66,11 @@ class AppTests(unittest.TestCase):
         with Image.open(io.BytesIO(image.data)) as result:
             self.assertEqual(result.size, (256, 256))
         image.close()
-        self.assertEqual(self.client.get('/api/jobs').json[0]['id'], job['id'])
+        self.assertEqual(self.client.get('/api/jobs').json['items'][0]['id'], job['id'])
         self.app.extensions['jobs'].close()
         reopened = create_app(self.tmp.name, engine=RecordingEngine())
         try:
-            self.assertEqual(reopened.test_client().get('/api/jobs').json[0]['spec']['prompt'], 'A quiet garden')
+            self.assertEqual(reopened.test_client().get('/api/jobs').json['items'][0]['spec']['prompt'], 'A quiet garden')
         finally:
             reopened.extensions['jobs'].close()
 
@@ -110,7 +110,7 @@ class AppTests(unittest.TestCase):
         for count in (0, 9, -1, True, 1.5, '2', None):
             with self.subTest(count=count):
                 self.assertEqual(self.submit(num_images=count).status_code, 400)
-        self.assertEqual(self.client.get('/api/jobs').json, [])
+        self.assertEqual(self.client.get('/api/jobs').json['items'], [])
 
     def test_batch_queue_limit_is_atomic(self):
         started, release = threading.Event(), threading.Event()
@@ -127,7 +127,7 @@ class AppTests(unittest.TestCase):
             rejected = self.submit(num_images=8)
             self.assertEqual(rejected.status_code, 400)
             self.assertEqual(rejected.json['error_key'], 'error_queue')
-            self.assertEqual(len(self.client.get('/api/jobs').json), 16)
+            self.assertEqual(len(self.client.get('/api/jobs').json['items']), 16)
         finally:
             release.set()
 

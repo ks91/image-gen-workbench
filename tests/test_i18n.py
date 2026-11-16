@@ -54,7 +54,7 @@ class LanguageTests(unittest.TestCase):
         self.assertEqual(en['phase'], 'Failed')
         self.assertIn('interrupted', en['error'])
         self.client.set_cookie('workbench_language', 'ja')
-        ja = self.client.get('/api/jobs').json[0]
+        ja = self.client.get('/api/jobs').json['items'][0]
         self.assertEqual(ja['phase'], '失敗')
         self.assertIn('中断', ja['error'])
         self.assertEqual(en['spec'], ja['spec'])

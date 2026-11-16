@@ -84,6 +84,20 @@ class Jobs:
         with self.connect() as db:
             return [json.loads(row[0]) for row in db.execute('SELECT body FROM jobs ORDER BY rowid DESC')]
 
+    def page(self, number=1, favorites=False):
+        page_size = 24
+        where = "WHERE json_extract(body, '$.favorite') = 1" if favorites else ''
+        with self.connect() as db:
+            # Count and rows must describe the same snapshot while generation continues.
+            db.execute('BEGIN')
+            total = db.execute(f'SELECT COUNT(*) FROM jobs {where}').fetchone()[0]
+            pages = max(1, (total + page_size - 1) // page_size)
+            number = min(number, pages)
+            rows = db.execute(f'SELECT body FROM jobs {where} ORDER BY rowid DESC LIMIT ? OFFSET ?',
+                              (page_size, (number - 1) * page_size))
+            items = [json.loads(row[0]) for row in rows]
+        return dict(items=items, total=total, page=number, pages=pages, page_size=page_size)
+
     def get(self, job_id):
         with self.connect() as db:
             row = db.execute('SELECT body FROM jobs WHERE id=?', (job_id,)).fetchone()

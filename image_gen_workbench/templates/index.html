@@ -48,6 +48,11 @@
     <div class="section-heading"><div><div class="eyebrow">YOUR EXPLORATIONS</div><h2>{{ tr('history') }} <span id="count">0</span></h2></div><label class="filter"><input id="favorites" type="checkbox"> {{ tr('favorites') }}</label></div>
     <div id="compare" hidden><div class="section-heading"><h3>{{ tr('compare_heading') }}</h3><button id="clear-compare" class="text-button">{{ tr('clear_compare') }}</button></div><div id="compare-images"></div></div>
     <div id="empty"><div class="empty-icon">◈</div><h2>{{ tr('empty_heading') }}</h2><p>{{ tr('empty_hint') }}</p></div>
+    <nav class="pagination" data-i18n-aria-label="pagination" aria-label="{{ t('pagination') }}">
+      <button id="prev-page" type="button" disabled>{{ tr('previous_page') }}</button>
+      <span id="page-status" role="status" aria-live="polite"></span>
+      <button id="next-page" type="button" disabled>{{ tr('next_page') }}</button>
+    </nav>
     <div id="history"></div>
   </section>
 </main>

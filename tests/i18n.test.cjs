@@ -23,7 +23,7 @@ test('only supported preferences are persisted with a one-year first-party cooki
 });
 
 // Minimal DOM adapter for the actual application event handlers. No model/server is required.
-function harness(initialJobs) {
+function harness(initialJobs, respond = null) {
   class Element {
     constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.dataset = {}; this.value = ''; this.textContent = ''; this.className = ''; this.hidden = false; }
     append(...children) { this.children.push(...children); }
@@ -51,7 +51,7 @@ function harness(initialJobs) {
     setTimeout: () => {}, FormData: class {},
     fetch: async (url, options = {}) => {
       requests.push({url, options});
-      return error ? {ok: false, json: async () => error} : {ok: true, json: async () => initialJobs};
+      return error ? {ok: false, json: async () => error} : {ok: true, json: async () => respond ? await respond(url, options) : ({items: initialJobs, total: initialJobs.length, page: 1, pages: 1, page_size: 24})};
     }});
   for (const file of ['i18n.js', 'app.js']) vm.runInContext(fs.readFileSync(path.join(root, 'image_gen_workbench/static', file), 'utf8'), context);
   const descendants = node => [node, ...node.children.flatMap(descendants)];
@@ -137,4 +137,54 @@ test('reuse keeps the seed for repeatable experiments, while editing clears it',
   assert.equal(h.nodes['source-preview'].src, `/images/${job.id}.png`);
   h.switchTo('ja');
   assert.equal(h.nodes.seed.value, '');
+});
+
+
+test('pages preserve comparison, source and note drafts; favorites and submission return to page one', async () => {
+  const all = Array.from({length: 25}, (_, i) => ({...job, id: String(i).padStart(32, '0')}));
+  const h = harness(all, (url) => {
+    const page = Number(new URL(url, 'http://localhost').searchParams.get('page') || 1);
+    return {items: all.slice((page - 1) * 24, page * 24), total: 25, page, pages: 2, page_size: 24};
+  });
+  await settled();
+  assert.equal(h.nodes.history.children.length, 24);
+  assert.equal(h.nodes['prev-page'].disabled, true);
+  await h.find('button', 'Edit this image').onclick();
+  await h.find('button', 'Compare').onclick();
+  const note = h.descendants(h.nodes.history).find(n => n.tagName === 'textarea');
+  note.value = 'Draft across pages'; note.oninput();
+  await h.nodes['next-page'].onclick();
+  assert.equal(h.nodes.history.children.length, 1);
+  assert.equal(h.nodes['next-page'].disabled, true);
+  assert.equal(h.nodes['compare-images'].children.length, 1);
+  assert.equal(h.nodes['source-preview'].src, `/images/${all[0].id}.png`);
+  await h.find('button', 'Compare').onclick();
+  assert.equal(h.nodes['compare-images'].children.length, 2);
+  h.switchTo('ja');
+  assert.equal(h.nodes['page-status'].textContent, '2 / 2 ページ · 全 25 件');
+  await h.nodes['prev-page'].onclick();
+  assert.equal(h.descendants(h.nodes.history).find(n => n.tagName === 'textarea').value, 'Draft across pages');
+  await h.nodes['next-page'].onclick();
+  h.nodes.favorites.checked = true;
+  await h.nodes.favorites.onchange();
+  assert.match(h.requests.at(-1).url, /page=1&favorites=1/);
+  await h.nodes['next-page'].onclick();
+  await h.nodes['generate-form'].onsubmit({preventDefault() {}});
+  assert.match(h.requests.at(-1).url, /page=1&favorites=0/);
+});
+
+test('late page responses cannot overwrite a newer navigation', async () => {
+  let resolveSecond;
+  const h = harness([job], url => {
+    const page = Number(new URL(url, 'http://localhost').searchParams.get('page') || 1);
+    const data = {items: [job], total: 25, page, pages: 2, page_size: 24};
+    return page === 2 ? new Promise(resolve => { resolveSecond = () => resolve(data); }) : data;
+  });
+  await settled();
+  const pending = h.nodes['next-page'].onclick();
+  await settled();
+  h.nodes.favorites.checked = true;
+  await h.nodes.favorites.onchange();
+  resolveSecond(); await pending;
+  assert.equal(h.nodes['page-status'].textContent, 'Page 1 of 2 · 25 total');
 });
