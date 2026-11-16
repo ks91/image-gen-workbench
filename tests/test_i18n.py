@@ -34,8 +34,8 @@ class LanguageTests(unittest.TestCase):
         self.assertIn('<html lang="en">', self.client.get('/').text)
 
     def test_validation_and_upload_errors_in_both_languages(self):
-        for language, prompt_message, upload_message in [('en', 'Enter a prompt.', 'Choose a readable image file.'),
-                                                          ('ja', 'プロンプトを入力してください。', '読み込める画像ファイルを指定してください。')]:
+        for language, prompt_message, upload_message in [('en', 'Enter a prompt.', 'Choose a readable PNG, JPEG, or WebP image.'),
+                                                          ('ja', 'プロンプトを入力してください。', '読み込める PNG・JPEG・WebP 画像を指定してください。')]:
             self.client.set_cookie('workbench_language', language)
             response = self.client.post('/api/jobs', json={'prompt': ''})
             self.assertEqual(response.status_code, 400)

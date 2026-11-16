@@ -30,7 +30,7 @@
       <label for="prompt">{{ tr('prompt') }}</label>
       <textarea id="prompt" required maxlength="12000" rows="6" data-i18n-placeholder="prompt_example" placeholder="{{ t('prompt_example') }}"></textarea>
       <div class="source-heading"><label>{{ tr('source') }} {{ tr('optional') }}</label><button id="clear-source" type="button" class="text-button" hidden>{{ tr('clear_source') }}</button></div>
-      <label class="upload" for="upload"><span id="upload-label">{{ t('upload') }}</span><input id="upload" type="file" accept="image/*" data-i18n-aria-label="upload" aria-label="{{ t('upload') }}"></label>
+      <label class="upload" for="upload"><span id="upload-label">{{ t('upload') }}</span><input id="upload" type="file" accept="image/png,image/jpeg,image/webp" data-i18n-aria-label="upload" aria-label="{{ t('upload') }}"></label>
       <img id="source-preview" data-i18n-alt="source_alt" alt="{{ t('source_alt') }}" hidden>
       <p class="hint">{{ tr('source_hint') }}</p>
       <details><summary>{{ tr('settings') }}</summary>

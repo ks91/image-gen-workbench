@@ -89,7 +89,7 @@ Notifications appear in the upper-right corner of the viewport, including when s
 3. Upload a source image or select **Edit this image** on a result. Describe the desired change, such as “change the background to sunset.” You can use the edited result as the source for another edit.
 4. Select **Compare** on up to two results to view them side by side. Use favorites and notes to track promising results and ideas.
 5. Select **Reset generation options** to restore 1024 × 1024, 12 steps, CFG 1, a random seed, one image, and an empty negative prompt. Your main prompt and selected source image stay unchanged.
-6. Select **Save PNG** to download an image. The PNG `generation` text metadata also contains the prompt and generation settings.
+6. Select **Save PNG** to download an image. The PNG `generation` text metadata also contains the prompt and generation settings, including the negative prompt and seed. Sharing the original PNG shares this metadata too; remove it with an image editor before sharing if it contains private information.
 
 **Use a different seed when editing a generated image.** Qwen-Image-2.1 can produce an oversaturated, over-sharpened near-copy and ignore edits when the starting noise used to create the reference is replayed (same random generator, seed, and output dimensions). **Edit this image** therefore clears the seed field to request a new random seed. **Reuse settings** retains the recorded seed for repeatable experiments. When uploading a previously generated image or entering a seed manually, avoid its original generation seed. See the [Qwen report](https://github.com/QwenLM/Qwen-Image-2.1/issues/9) and [Diffusers investigation](https://github.com/huggingface/diffusers/issues/14824). Changing seeds addresses this particular failure mode, not every possible editing artifact.
 
@@ -121,7 +121,7 @@ Local resource safeguards apply across all browser tabs:
 
 - At most 20 outstanding images, including cancelled jobs until the worker drains them.
 - At most 60 write requests per rolling minute (generation, uploads, annotation, and cancellation combined); excess requests receive HTTP 429. Read-only browsing and polling do not count.
-- At most two uploads being processed concurrently; each request remains limited to 20 MiB and each image to 20 million pixels.
+- At most two uploads being processed concurrently; each request remains limited to 20 MiB and each image to 20 million pixels. Uploads accept only PNG, JPEG, and WebP, checked by file contents rather than the filename or MIME type. Other formats (including EPS) are rejected before decoding; accepted images are re-encoded as PNG.
 - A default 10 GiB managed storage budget (images, history database and its journals), 1 GiB minimum free disk space, and 10,000 history/upload records combined. Queued outputs reserve a conservative storage allowance; actual capacity is checked again before saving. These are application safeguards, not an OS-level filesystem quota against unrelated processes.
 
 Adjust storage limits at startup, for example:
@@ -132,7 +132,7 @@ Adjust storage limits at startup, for example:
 
 When a limit is reached, new work is refused with a localized message (HTTP 507 for storage/record limits). Already queued generation can fail if disk space decreases before its output is saved. Existing images remain readable; nothing is automatically deleted. Delete unwanted entries and unused uploads from the UI, raise the limits, or, with the app stopped, archive the whole data directory and start with a fresh `--data-dir`. Avoid deleting individual files behind the history database.
 
-Responses disallow framing, restrict scripts and other resources to the app, disable MIME sniffing, omit referrer information, and request no browser caching. Cross-site write requests are rejected. Authentication and remote deployment remain out of scope: the server still binds only to loopback and uses the local Werkzeug server. Do not expose it directly to a network.
+Responses disallow framing, restrict scripts and other resources to the app, disable MIME sniffing, omit referrer information, and request no browser caching. Cross-site write requests are rejected. Authentication and remote deployment remain out of scope: the server still binds only to loopback and uses the local Werkzeug server. Do not expose it directly to a network. Loopback binding does not isolate OS users: other users and processes on the same machine can read prompts and images, submit jobs, and delete history. Use it only on a trusted personal machine; forwarding the port also gives anyone who can reach the forwarded port this access.
 
 Data is not deleted automatically. Inference runs on your computer; prompts and images are not sent to an external image-generation API. The server binds to loopback only. Only one server process can use a given data directory at a time.
 

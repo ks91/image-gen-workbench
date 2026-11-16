@@ -26,6 +26,33 @@ class SecurityTests(unittest.TestCase):
         self.jobs.close()
         self.tmp.cleanup()
 
+    def test_upload_rejects_eps_before_external_renderer_even_with_png_filename(self):
+        data = io.BytesIO()
+        Image.new('RGB', (16, 16)).save(data, 'EPS')
+        data.seek(0)
+        with patch('PIL.EpsImagePlugin.Ghostscript', side_effect=OSError('must not execute')) as renderer:
+            response = self.client.post('/api/uploads', data={'image': (data, 'pretend.png', 'image/png')})
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json['error_key'], 'error_upload')
+            renderer.assert_not_called()
+        self.assertEqual(list(self.jobs.images.glob('*.png')), [])
+
+    def test_upload_allows_only_supported_raster_formats_by_content(self):
+        for format in ('PNG', 'JPEG', 'WEBP', 'GIF', 'BMP', 'TIFF'):
+            with self.subTest(format=format):
+                data = io.BytesIO()
+                Image.new('RGB', (16, 16), 'red').save(data, format)
+                data.seek(0)
+                response = self.client.post('/api/uploads', data={'image': (data, 'image.png')})
+                if format in ('PNG', 'JPEG', 'WEBP'):
+                    self.assertEqual(response.status_code, 201)
+                    with Image.open(self.jobs.image_path(response.json['id'])) as saved:
+                        self.assertEqual(saved.format, 'PNG')
+                        self.assertEqual(saved.size, (16, 16))
+                else:
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(response.json['error_key'], 'error_upload')
+
     def test_cancelled_jobs_count_until_drained(self):
         started, release = threading.Event(), threading.Event()
         original = self.jobs.engine.generate

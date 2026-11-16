@@ -155,7 +155,7 @@ def create_app(data_dir='data', engine=None, **storage_limits):
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter('error', Image.DecompressionBombWarning)
-                with Image.open(file.stream) as source:
+                with Image.open(file.stream, formats=('PNG', 'JPEG', 'WEBP')) as source:
                     if source.width * source.height > 20_000_000:
                         raise UserError('error_pixels')
                     image = ImageOps.exif_transpose(source).convert('RGB')
