@@ -2,6 +2,10 @@
 
 A local image generation and editing workbench powered by **Qwen-Image-2.1**, with a Flask web interface. Generate an image, refine your prompt, edit an existing image, and compare results without losing your settings or history.
 
+![Image Gen Workbench in Safari, showing the Japanese interface, prompt controls, and a gallery of generated images.](docs/images/workbench-ja.jpg)
+
+The Japanese interface with generated images filtered to favorites. The interface can be switched between English and Japanese.
+
 ## Features
 
 - Generate 1–8 variations per submission with different seeds and choose a result to refine.
@@ -89,7 +93,7 @@ Notifications appear in the upper-right corner of the viewport, including when s
 3. Upload a source image or select **Edit this image** on a result. Describe the desired change, such as “change the background to sunset.” You can use the edited result as the source for another edit.
 4. Select **Compare** on up to two results to view them side by side. Use favorites and notes to track promising results and ideas.
 5. Select **Reset generation options** to restore 1024 × 1024, 12 steps, CFG 1, a random seed, one image, and an empty negative prompt. Your main prompt and selected source image stay unchanged.
-6. Select **Save PNG** to download an image. The PNG `generation` text metadata also contains the prompt and generation settings, including the negative prompt and seed. Sharing the original PNG shares this metadata too; choose **Save PNG without prompt** when sharing if it contains private information. This export removes all embedded metadata, including the prompt, negative prompt, seed, and other generation settings. The pixels, original stored PNG, and history remain unchanged.
+6. Select **Save PNG** to download an image. The PNG `generation` text metadata also contains the prompt and generation settings, including the negative prompt and seed. Sharing the original PNG shares this metadata too; open **Settings** in the header and turn off **Include prompt and generation settings in PNG** before using **Save PNG** if it contains private information. The option is on by default to preserve the existing export behavior. Changes apply immediately and persist in this browser for this site (other browsers or ports have separate preferences). If browser storage is unavailable, the setting applies to the current page only and a warning is shown. This export removes all embedded metadata, including the prompt, negative prompt, seed, and other generation settings. The pixels, original stored PNG, and history remain unchanged.
 
 **Use a different seed when editing a generated image.** Qwen-Image-2.1 can produce an oversaturated, over-sharpened near-copy and ignore edits when the starting noise used to create the reference is replayed (same random generator, seed, and output dimensions). **Edit this image** therefore clears the seed field to request a new random seed. **Reuse settings** retains the recorded seed for repeatable experiments. When uploading a previously generated image or entering a seed manually, avoid its original generation seed. See the [Qwen report](https://github.com/QwenLM/Qwen-Image-2.1/issues/9) and [Diffusers investigation](https://github.com/huggingface/diffusers/issues/14824). Changing seeds addresses this particular failure mode, not every possible editing artifact.
 
@@ -169,6 +173,20 @@ Translations are maintained in `image_gen_workbench/static/messages.json`, share
 
 The initial implementation was based on a local Qwen script that loaded the model on CPU before moving it to MPS, using 28 inference steps and CFG 3.5.
 
+
+## Inspect PNG generation metadata
+
+From the project directory, run:
+
+```sh
+./inspect-png "/path/to/image.png"
+```
+
+This read-only utility prints the PNG's `generation` metadata as formatted JSON, including the prompt, negative prompt, seed, and other saved settings. Unicode prompts are displayed directly. It does not start the server or load a model and works with the UI-only installation.
+
+If the field is missing (for example, after saving with **Include prompt and generation settings in PNG** turned off), it reports that no `generation` metadata was found. This does not rule out prompts in other applications' metadata fields. Invalid PNGs, unreadable files, or malformed JSON produce an error on stderr and exit status 1; successful inspection, including a missing field, exits with status 0.
+
+After installation, `image-gen-inspect IMAGE.png` is also available in the virtual environment. Alternatively, use `.venv/bin/python -m image_gen_workbench.inspect_png IMAGE.png`. Quote paths containing spaces. The `inspect-png` wrapper resolves relative image paths from your current working directory.
 
 ## License
 

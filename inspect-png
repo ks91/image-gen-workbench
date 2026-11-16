@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ ! -x "$PROJECT_DIR/.venv/bin/python" ]; then
+  echo 'Run python3 setup.py first.' >&2
+  exit 1
+fi
+exec "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/image_gen_workbench/inspect_png.py" "$@"

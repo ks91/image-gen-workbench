@@ -11,3 +11,5 @@
 @media(max-width:600px){#notification{top:12px;right:16px;padding:12px}}
 
 .pagination-bottom{position:static;margin-top:22px}
+
+#app-settings{width:min(540px,calc(100vw - 32px));max-height:85vh;overflow:auto;color:var(--text);padding:24px}#app-settings .section-heading{margin-bottom:20px}#app-settings h3{margin-top:0}#app-settings .setting-toggle{display:flex;align-items:flex-start;gap:10px;font-size:14px;line-height:1.6}#app-settings .setting-toggle input{flex:none;margin-top:5px}#app-settings .hint{font-size:12px}

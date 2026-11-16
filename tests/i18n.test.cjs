@@ -23,7 +23,7 @@ test('only supported preferences are persisted with a one-year first-party cooki
 });
 
 // Minimal DOM adapter for the actual application event handlers. No model/server is required.
-function harness(initialJobs, respond = null) {
+function harness(initialJobs, respond = null, storage = new Map()) {
   class Element {
     constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.dataset = {}; this.value = ''; this.textContent = ''; this.className = ''; this.hidden = false; }
     append(...children) { this.children.push(...children); }
@@ -33,6 +33,8 @@ function harness(initialJobs, respond = null) {
     getAttribute(key) { return this.attrs[key]; }
     removeAttribute(key) { delete this.attrs[key]; delete this[key]; }
     focus() { doc.activeElement = this; }
+    showModal() { this.open = true; }
+    close() { this.open = false; }
     get classList() { return {contains: name => this.className.split(' ').includes(name)}; }
   }
   const nodes = {};
@@ -50,6 +52,7 @@ function harness(initialJobs, respond = null) {
   let error = null, confirmation = true;
   const confirmations = [];
   const context = vm.createContext({document: doc, Date, JSON, Map, String, Number, Error, Object,
+    localStorage: {getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value)},
     setTimeout: (callback, delay) => { timers.set(++timerId, {callback, delay}); return timerId; },
     clearTimeout: id => timers.delete(id), FormData: class {},
     confirm: message => { confirmations.push(message); return confirmation; },
@@ -303,14 +306,44 @@ test('notifications can be dismissed and ordinary messages expire without hiding
 });
 
 
-test('history offers PNG exports with and without metadata in both languages', async () => {
-  const h = harness([job]); await settled();
+test('settings control the single PNG download and persist across reloads', async () => {
+  const storage = new Map();
+  const h = harness([job], null, storage); await settled();
+  assert.equal(h.nodes['include-prompt'].checked, true);
+  h.nodes['open-settings'].onclick();
+  assert.equal(h.nodes['app-settings'].open, true);
   for (const language of ['en', 'ja']) {
     h.switchTo(language);
     assert.equal(h.find('a', catalog[language].download).href, job.image_url);
-    const clean = h.find('a', catalog[language].download_clean);
-    assert.ok(clean);
-    assert.equal(clean.href, job.image_url + '?metadata=0');
-    assert.equal(clean.download, `qwen-${job.id}-clean.png`);
+    h.nodes['include-prompt'].checked = false;
+    h.nodes['include-prompt'].onchange();
+    const download = h.find('a', catalog[language].download);
+    assert.equal(download.href, job.image_url + '?metadata=0');
+    assert.equal(download.download, `qwen-${job.id}-clean.png`);
+    assert.equal(h.descendants(h.nodes.history).filter(n => n.tagName === 'a' && n.download).length, 1);
+    h.nodes['include-prompt'].checked = true;
+    h.nodes['include-prompt'].onchange();
+  }
+  h.nodes['include-prompt'].checked = false;
+  h.nodes['include-prompt'].onchange();
+  h.nodes['close-settings'].onclick();
+  assert.equal(h.nodes['app-settings'].open, false);
+  const reloaded = harness([job], null, storage); await settled();
+  assert.equal(reloaded.nodes['include-prompt'].checked, false);
+  assert.equal(reloaded.find('a', catalog.en.download).href, job.image_url + '?metadata=0');
+});
+
+test('invalid or unavailable preference storage leaves settings usable', async () => {
+  for (const storage of [new Map([['workbench_settings_v1', '{broken']]),
+                         new Map([['workbench_settings_v1', '{"includePrompt":"false"}']]),
+                         {get() { throw new Error('blocked'); }, set() { throw new Error('blocked'); }}]) {
+    const h = harness([job], null, storage); await settled();
+    assert.equal(h.nodes['include-prompt'].checked, true);
+    h.nodes['include-prompt'].checked = false;
+    h.nodes['include-prompt'].onchange();
+    assert.equal(h.find('a', catalog.en.download).href, job.image_url + '?metadata=0');
+    if (!(storage instanceof Map)) {
+      assert.equal(h.nodes['settings-storage-warning'].hidden, false);
+    }
   }
 });

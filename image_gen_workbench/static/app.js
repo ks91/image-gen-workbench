@@ -6,6 +6,25 @@ const noteDrafts = new Map();
 const catalog = JSON.parse($('translations').textContent);
 let language = document.documentElement.lang;
 const t = (key, params = {}) => WorkbenchI18n.translate(catalog, language, key, params);
+const settingsKey = 'workbench_settings_v1';
+let includePrompt = true;
+try {
+  const saved = JSON.parse(localStorage.getItem(settingsKey));
+  if (typeof saved?.includePrompt === 'boolean') includePrompt = saved.includePrompt;
+} catch { /* Storage may be unavailable or contain an old/invalid value. */ }
+$('include-prompt').checked = includePrompt;
+$('open-settings').onclick = () => $('app-settings').showModal();
+$('close-settings').onclick = () => $('app-settings').close();
+$('include-prompt').onchange = () => {
+  includePrompt = $('include-prompt').checked;
+  try {
+    localStorage.setItem(settingsKey, JSON.stringify({includePrompt}));
+    $('settings-storage-warning').hidden = true;
+  } catch {
+    $('settings-storage-warning').hidden = false;
+  }
+  render();
+};
 let currentNotice = null, noticeTimer = null;
 function showNotice() {
   const isError = Boolean(currentNotice?.error);
@@ -173,8 +192,10 @@ function render() {
           else { if (comparison.length === 2) comparison.shift(); comparison.push(job); }
           render();
         }));
-      const download = element('a', t('download')); download.href = job.image_url; download.download = `qwen-${job.id}.png`; actions.append(download);
-      const clean = element('a', t('download_clean')); clean.href = `${job.image_url}?metadata=0`; clean.download = `qwen-${job.id}-clean.png`; actions.append(clean);
+      const download = element('a', t('download'));
+      download.href = job.image_url + (includePrompt ? '' : '?metadata=0');
+      download.download = `qwen-${job.id}${includePrompt ? '' : '-clean'}.png`;
+      actions.append(download);
     }
     if (['queued', 'running'].includes(job.status)) actions.append(button(t('cancel'), async () => { await api(`/api/jobs/${job.id}/cancel`, {method: 'POST'}); await refresh(true); }));
     if (!['queued', 'running'].includes(job.status)) actions.append(button(t('delete'), async () => {

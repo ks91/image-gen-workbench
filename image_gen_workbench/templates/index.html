@@ -17,7 +17,7 @@
 </div>
 <header>
   <div><span class="mark">◈</span> <strong>Image Gen Workbench</strong><small>{{ tr('tagline') }}</small></div>
-  <div class="header-controls"><span class="model">● {% if is_demo %}{{ tr('demo') }}{% else %}{{ engine }}{% endif %}</span>
+  <div class="header-controls"><button id="open-settings" class="text-button" type="button" aria-haspopup="dialog">{{ tr('app_settings') }}</button><span class="model">● {% if is_demo %}{{ tr('demo') }}{% else %}{{ engine }}{% endif %}</span>
     <label class="language-label" for="language">Language / 言語
       <select id="language"><option value="en" {% if language == 'en' %}selected{% endif %}>English</option><option value="ja" {% if language == 'ja' %}selected{% endif %}>日本語</option></select>
     </label>
@@ -67,6 +67,16 @@
     <button id="cleanup-uploads" class="text-button" type="button">{{ tr('cleanup_uploads') }}</button>
   </section>
 </main>
+<dialog id="app-settings" aria-labelledby="app-settings-title">
+  <div class="section-heading"><h2 id="app-settings-title">{{ tr('app_settings') }}</h2><button id="close-settings" class="text-button" type="button" autofocus>{{ tr('close') }}</button></div>
+  <section aria-labelledby="export-settings-title">
+    <h3 id="export-settings-title">{{ tr('png_export') }}</h3>
+    <label class="setting-toggle"><input id="include-prompt" type="checkbox" checked aria-describedby="include-prompt-hint"> {{ tr('include_prompt') }}</label>
+    <p id="include-prompt-hint" class="hint">{{ tr('include_prompt_hint') }}</p>
+  </section>
+  <p class="hint">{{ tr('settings_scope') }}</p>
+  <p id="settings-storage-warning" class="error" role="status" hidden>{{ tr('settings_storage_warning') }}</p>
+</dialog>
 <dialog id="viewer"><button id="close-viewer" class="text-button">{{ tr('close') }}</button><img data-i18n-alt="viewer_alt" alt="{{ t('viewer_alt') }}"></dialog>
 </body>
 </html>

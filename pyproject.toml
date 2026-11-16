@@ -17,6 +17,7 @@ model = ["torch>=2.10,<3", "diffusers>=0.42.1,<0.43", "transformers>=5.22.1,<6",
 
 [project.scripts]
 image-gen-workbench = "image_gen_workbench.__main__:main"
+image-gen-inspect = "image_gen_workbench.inspect_png:main"
 
 [tool.setuptools.packages.find]
 include = ["image_gen_workbench*"]
