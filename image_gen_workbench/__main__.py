@@ -1,11 +1,40 @@
 import argparse
 import os
+import sys
+import threading
+import webbrowser
 from pathlib import Path
 
 from filelock import FileLock, Timeout
+from werkzeug.serving import make_server
 
 from .app import create_app
 from .engine import DemoEngine, QwenEngine
+
+
+def launch_browser(url):
+    try:
+        if webbrowser.open(url):
+            return
+    except Exception:
+        pass
+    print(f'Could not open a browser automatically. Open {url} manually.', file=sys.stderr)
+
+
+def run_server(app, port, open_browser=True):
+    # Bind before opening the browser: an occupied port must not open another app.
+    server = make_server('127.0.0.1', port, app, threaded=True)
+    url = f'http://127.0.0.1:{port}'
+    print(f'Image Gen Workbench — {url} (Ctrl+C to stop)', flush=True)
+    try:
+        if open_browser:
+            threading.Thread(target=launch_browser, args=(url,),
+                             daemon=True, name='open-browser').start()
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
 
 
 def main():
@@ -17,6 +46,7 @@ def main():
     parser.add_argument('--model', default='Qwen/Qwen-Image-2.1', help='Hugging Face model ID or a local model directory')
     parser.add_argument('--offline', action='store_true', help='Use cached model weights only')
     parser.add_argument('--demo', action='store_true', help='Try the interface with demo images without loading a model')
+    parser.add_argument('--no-browser', action='store_true', help='Start the server without opening a browser')
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error('port must be between 1 and 65535.')
@@ -28,7 +58,7 @@ def main():
             engine = DemoEngine() if args.demo else QwenEngine(args.model, args.device, args.offline, args.dtype)
             app = create_app(args.data_dir, engine=engine)
             try:
-                app.run(host='127.0.0.1', port=args.port, threaded=True, debug=False, use_reloader=False)
+                run_server(app, args.port, open_browser=not args.no_browser)
             finally:
                 app.extensions['jobs'].close()
     except Timeout:

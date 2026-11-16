@@ -23,7 +23,7 @@ python3.12 setup.py
 ./run
 ```
 
-Open **http://127.0.0.1:7860** in your browser. Press **Ctrl+C** in the terminal to stop the server.
+Your default browser opens automatically at **http://127.0.0.1:7860** once the server has bound its port. If the browser cannot be opened, visit that URL manually. Press **Ctrl+C** in the terminal to stop the server.
 
 The setup script creates a project-local `.venv` and installs the application and model dependencies without modifying your system Python. Model weights are downloaded from Hugging Face on the first generation request. Installation and the initial model download require an internet connection. An existing Hugging Face model cache is reused automatically.
 
@@ -43,6 +43,7 @@ Qwen is a large model: allow substantial RAM/VRAM and disk space. The reference 
 Device selection defaults to MPS, then CUDA, then CPU. Automatic precision uses `bfloat16` on GPU and `float32` on CPU. GPU/OS support for `bfloat16` is required; CPU inference may be very slow. You can select the device and precision explicitly:
 
 ```sh
+./run --no-browser                   # Start without opening a browser
 ./run --offline                      # Use cached weights only
 ./run --device mps --port 7861
 ./run --dtype float32                # Higher memory use
