@@ -174,6 +174,7 @@ function render() {
           render();
         }));
       const download = element('a', t('download')); download.href = job.image_url; download.download = `qwen-${job.id}.png`; actions.append(download);
+      const clean = element('a', t('download_clean')); clean.href = `${job.image_url}?metadata=0`; clean.download = `qwen-${job.id}-clean.png`; actions.append(clean);
     }
     if (['queued', 'running'].includes(job.status)) actions.append(button(t('cancel'), async () => { await api(`/api/jobs/${job.id}/cancel`, {method: 'POST'}); await refresh(true); }));
     if (!['queued', 'running'].includes(job.status)) actions.append(button(t('delete'), async () => {

@@ -68,6 +68,27 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.data, content)
 
+    def test_export_without_metadata_preserves_pixels_and_original(self):
+        created = self.submit(prompt='Private prompt', negative_prompt='Private negative').json
+        job = self.finish(created['id'])
+        url = job['image_url']
+        with self.client.get(url) as response:
+            original = response.data
+        with self.client.get(url + '?metadata=0') as response:
+            self.assertEqual(response.status_code, 200)
+            exported = response.data
+        with Image.open(io.BytesIO(original)) as before, Image.open(io.BytesIO(exported)) as after:
+            self.assertIn('Private prompt', before.info['generation'])
+            self.assertEqual(after.info, {})
+            self.assertEqual(after.mode, before.mode)
+            self.assertEqual(after.size, before.size)
+            self.assertEqual(after.tobytes(), before.tobytes())
+        with self.client.get(url) as response:
+            self.assertEqual(response.data, original)
+        self.assertEqual(self.client.get('/api/jobs/' + created['id']).json['spec']['prompt'], 'Private prompt')
+        with self.client.get('/images/' + 'f' * 32 + '.png?metadata=0') as response:
+            self.assertEqual(response.status_code, 404)
+
     def test_home_and_generation_persist_image_and_parameters(self):
         self.assertEqual(self.client.get('/').status_code, 200)
         response = self.submit()

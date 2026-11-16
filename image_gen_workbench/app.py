@@ -1,4 +1,5 @@
 from .i18n import UserError, MESSAGES, language, translate, localize_job
+import io
 import hashlib
 from pathlib import Path
 import warnings
@@ -167,6 +168,15 @@ def create_app(data_dir='data', engine=None, **storage_limits):
     @app.get('/images/<image_id>.png')
     def image(image_id):
         try:
+            if request.args.get('metadata') == '0':
+                with Image.open(jobs.image_path(image_id), formats=('PNG',)) as source:
+                    clean = source.copy()
+                clean.info.clear()
+                output = io.BytesIO()
+                clean.save(output, format='PNG')
+                output.seek(0)
+                return send_file(output, mimetype='image/png', as_attachment=True,
+                                 download_name=f'qwen-{image_id}-clean.png')
             return send_file(jobs.image_path(image_id), mimetype='image/png')
         except FileNotFoundError:
             raise KeyError(image_id) from None

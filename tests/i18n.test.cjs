@@ -301,3 +301,16 @@ test('notifications can be dismissed and ordinary messages expire without hiding
   assert.equal(h.nodes['notification'].hidden, true);
   assert.equal(h.nodes.notice.textContent, '');
 });
+
+
+test('history offers PNG exports with and without metadata in both languages', async () => {
+  const h = harness([job]); await settled();
+  for (const language of ['en', 'ja']) {
+    h.switchTo(language);
+    assert.equal(h.find('a', catalog[language].download).href, job.image_url);
+    const clean = h.find('a', catalog[language].download_clean);
+    assert.ok(clean);
+    assert.equal(clean.href, job.image_url + '?metadata=0');
+    assert.equal(clean.download, `qwen-${job.id}-clean.png`);
+  }
+});
