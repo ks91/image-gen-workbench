@@ -17,7 +17,7 @@ class StartupTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as result:
                 cli.main()
         self.assertEqual(result.exception.code, 0)
-        self.assertEqual(output.getvalue(), 'Image Gen Workbench 0.1.0\n')
+        self.assertEqual(output.getvalue(), 'Image Gen Workbench 0.1.1-dev\n')
         create.assert_not_called()
         mkdir.assert_not_called()
         serve.assert_not_called()
@@ -27,7 +27,7 @@ class StartupTests(unittest.TestCase):
         result = subprocess.run([str(root / 'run'), '--version'], cwd='/tmp',
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, 'Image Gen Workbench 0.1.0\n')
+        self.assertEqual(result.stdout, 'Image Gen Workbench 0.1.1-dev\n')
         self.assertEqual(result.stderr, '')
 
     def test_browser_opens_after_binding_and_uses_selected_port(self):
