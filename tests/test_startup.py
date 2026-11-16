@@ -1,3 +1,6 @@
+import io
+import subprocess
+from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -5,6 +8,28 @@ from image_gen_workbench import __main__ as cli
 
 
 class StartupTests(unittest.TestCase):
+    def test_version_exits_before_creating_data_or_starting_server(self):
+        with patch('sys.argv', ['image-gen-workbench', '--version']), \
+             patch('sys.stdout', new_callable=io.StringIO) as output, \
+             patch.object(cli, 'create_app') as create, \
+             patch.object(cli.Path, 'mkdir') as mkdir, \
+             patch.object(cli, 'run_server') as serve:
+            with self.assertRaises(SystemExit) as result:
+                cli.main()
+        self.assertEqual(result.exception.code, 0)
+        self.assertEqual(output.getvalue(), 'Image Gen Workbench 0.1.0\n')
+        create.assert_not_called()
+        mkdir.assert_not_called()
+        serve.assert_not_called()
+
+    def test_run_wrapper_version(self):
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run([str(root / 'run'), '--version'], cwd='/tmp',
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, 'Image Gen Workbench 0.1.0\n')
+        self.assertEqual(result.stderr, '')
+
     def test_browser_opens_after_binding_and_uses_selected_port(self):
         events = []
         server = MagicMock()

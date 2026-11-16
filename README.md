@@ -48,6 +48,7 @@ Qwen is a large model: allow substantial RAM/VRAM and disk space. The reference 
 Device selection defaults to MPS, then CUDA, then CPU. Automatic precision uses `bfloat16` on GPU and `float32` on CPU. GPU/OS support for `bfloat16` is required; CPU inference may be very slow. You can select the device and precision explicitly:
 
 ```sh
+./run --version                      # Print Image Gen Workbench 0.1.0 and exit
 ./run --no-browser                   # Start without opening a browser
 ./run --offline                      # Use cached weights only
 ./run --device mps --port 7861

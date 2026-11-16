@@ -8,6 +8,7 @@ from pathlib import Path
 from filelock import FileLock, Timeout
 from werkzeug.serving import make_server
 
+from . import __version__
 from .app import create_app
 from .engine import DemoEngine, QwenEngine
 
@@ -39,6 +40,7 @@ def run_server(app, port, open_browser=True):
 
 def main():
     parser = argparse.ArgumentParser(description='Image Gen Workbench — http://127.0.0.1:7860')
+    parser.add_argument('--version', action='version', version=f'Image Gen Workbench {__version__}')
     parser.add_argument('--port', type=int, default=7860)
     parser.add_argument('--data-dir', type=Path, default=Path('data'))
     parser.add_argument('--device', choices=['auto', 'mps', 'cuda', 'cpu'], default='auto')

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "image-gen-workbench"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A local Qwen image generation and editing studio"
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -24,3 +24,6 @@ include = ["image_gen_workbench*"]
 
 [tool.setuptools.package-data]
 image_gen_workbench = ["templates/*.html", "static/*.css", "static/*.js", "static/*.json"]
+
+[tool.setuptools.dynamic]
+version = {attr = "image_gen_workbench.__version__"}
