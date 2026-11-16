@@ -47,7 +47,12 @@ def main():
     parser.add_argument('--offline', action='store_true', help='Use cached model weights only')
     parser.add_argument('--demo', action='store_true', help='Try the interface with demo images without loading a model')
     parser.add_argument('--no-browser', action='store_true', help='Start the server without opening a browser')
+    parser.add_argument('--max-storage-gb', type=int, default=10, help='Managed data limit in GiB (default: 10)')
+    parser.add_argument('--min-free-gb', type=int, default=1, help='Disk space to keep free in GiB (default: 1)')
+    parser.add_argument('--max-records', type=int, default=10000, help='Combined history and upload limit (default: 10000)')
     args = parser.parse_args()
+    if args.max_storage_gb < 1 or args.min_free_gb < 0 or args.max_records < 1:
+        parser.error('Storage and record limits must be positive; minimum free space must be nonnegative.')
     if not 1 <= args.port <= 65535:
         parser.error('port must be between 1 and 65535.')
     os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
@@ -56,7 +61,9 @@ def main():
     try:
         with lock.acquire(timeout=0):
             engine = DemoEngine() if args.demo else QwenEngine(args.model, args.device, args.offline, args.dtype)
-            app = create_app(args.data_dir, engine=engine)
+            app = create_app(args.data_dir, engine=engine,
+                             max_storage_bytes=args.max_storage_gb * 1024**3,
+                             min_free_bytes=args.min_free_gb * 1024**3, max_records=args.max_records)
             try:
                 run_server(app, args.port, open_browser=not args.no_browser)
             finally:

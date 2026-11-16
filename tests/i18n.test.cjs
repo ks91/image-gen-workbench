@@ -46,16 +46,22 @@ function harness(initialJobs, respond = null) {
     createElement: tag => new Element(tag),
     querySelectorAll: selector => selector === '[data-i18n]' ? [label] : []};
   const requests = [];
-  let error = null;
+  const timers = new Map(); let timerId = 0;
+  let error = null, confirmation = true;
+  const confirmations = [];
   const context = vm.createContext({document: doc, Date, JSON, Map, String, Number, Error, Object,
-    setTimeout: () => {}, FormData: class {},
+    setTimeout: (callback, delay) => { timers.set(++timerId, {callback, delay}); return timerId; },
+    clearTimeout: id => timers.delete(id), FormData: class {},
+    confirm: message => { confirmations.push(message); return confirmation; },
     fetch: async (url, options = {}) => {
       requests.push({url, options});
       return error ? {ok: false, json: async () => error} : {ok: true, json: async () => respond ? await respond(url, options) : ({items: initialJobs, total: initialJobs.length, page: 1, pages: 1, page_size: 24})};
     }});
   for (const file of ['i18n.js', 'app.js']) vm.runInContext(fs.readFileSync(path.join(root, 'image_gen_workbench/static', file), 'utf8'), context);
   const descendants = node => [node, ...node.children.flatMap(descendants)];
-  return {nodes, doc, label, requests, descendants,
+  return {nodes, doc, label, requests, descendants, confirmations, timers,
+    expireNotices: () => { for (const [id, timer] of [...timers]) if (timer.delay === 8000) { timers.delete(id); timer.callback(); } },
+    confirm: value => { confirmation = value; },
     find: (tag, text) => descendants(nodes.history).find(node => node.tagName === tag && node.textContent === text),
     fail: data => { error = data; },
     switchTo: language => { nodes.language.value = language; nodes.language.onchange(); }};
@@ -173,6 +179,30 @@ test('pages preserve comparison, source and note drafts; favorites and submissio
   assert.match(h.requests.at(-1).url, /page=1&favorites=0/);
 });
 
+test('bottom pagination stays synchronized with top controls and language changes', async () => {
+  const h = harness([job], url => {
+    const page = Number(new URL(url, 'http://localhost').searchParams.get('page') || 1);
+    return {items: [job], total: 25, page, pages: 2, page_size: 24};
+  });
+  await settled();
+  function check(page) {
+    for (const suffix of ['', '-bottom']) {
+      assert.equal(h.nodes[`prev-page${suffix}`].disabled, page === 1);
+      assert.equal(h.nodes[`next-page${suffix}`].disabled, page === 2);
+      assert.equal(h.nodes[`page-status${suffix}`].textContent, h.nodes['page-status'].textContent);
+    }
+  }
+  check(1);
+  await h.nodes['next-page-bottom'].onclick();
+  check(2);
+  h.switchTo('ja');
+  assert.equal(h.nodes['page-status-bottom'].textContent, '2 / 2 ページ · 全 25 件');
+  await h.nodes['prev-page-bottom'].onclick();
+  check(1);
+  await h.nodes['next-page'].onclick();
+  check(2);
+});
+
 test('late page responses cannot overwrite a newer navigation', async () => {
   let resolveSecond;
   const h = harness([job], url => {
@@ -187,4 +217,87 @@ test('late page responses cannot overwrite a newer navigation', async () => {
   await h.nodes.favorites.onchange();
   resolveSecond(); await pending;
   assert.equal(h.nodes['page-status'].textContent, 'Page 1 of 2 · 25 total');
+});
+
+
+test('reset restores generation defaults while preserving prompt, source, language and history notes', async () => {
+  const h = harness([job]); await settled();
+  await h.find('button', 'Edit this image').onclick();
+  h.nodes.prompt.value = 'Keep this prompt';
+  h.nodes.width.value = 2048; h.nodes.steps.value = 40; h.nodes.cfg.value = 5;
+  h.nodes.seed.value = '123'; h.nodes.num_images.value = 8; h.nodes.negative_prompt.value = 'noise';
+  h.switchTo('ja');
+  await h.nodes['reset-options'].onclick();
+  for (const [key, value] of Object.entries({width: 1024, height: 1024, steps: 12, cfg: 1, num_images: 1, seed: '', negative_prompt: ''})) {
+    assert.equal(String(h.nodes[key].value), String(value), key);
+  }
+  assert.equal(h.nodes.prompt.value, 'Keep this prompt');
+  assert.equal(h.nodes['source-preview'].src, `/images/${job.id}.png`);
+  assert.equal(h.doc.documentElement.lang, 'ja');
+  assert.equal(h.nodes.history.children.length, 1);
+});
+
+test('deletion requires confirmation and clears a deleted source and comparison', async () => {
+  let deleted = false;
+  const h = harness([job], (url, options) => {
+    if (options.method === 'DELETE') { deleted = true; return {deleted: job.id}; }
+    return {items: deleted ? [] : [job], total: deleted ? 0 : 1, page: 1, pages: 1, page_size: 24};
+  });
+  await settled();
+  await h.find('button', 'Edit this image').onclick();
+  await h.find('button', 'Compare').onclick();
+  h.confirm(false);
+  await h.find('button', 'Delete').onclick();
+  assert.equal(deleted, false);
+  h.confirm(true);
+  await h.find('button', 'Delete').onclick();
+  assert.equal(deleted, true);
+  assert.equal(h.nodes.history.children.length, 0);
+  assert.equal(h.nodes['source-preview'].hidden, true);
+  assert.equal(h.nodes.compare.hidden, true);
+  assert.equal(h.confirmations.length, 2);
+});
+
+test('active jobs offer cancellation but not deletion', async () => {
+  const h = harness([{...job, status: 'running', image_url: null}]); await settled();
+  assert.ok(h.find('button', 'Cancel'));
+  assert.equal(h.find('button', 'Delete'), undefined);
+});
+
+
+test('unused upload cleanup confirms and preserves the currently selected source', async () => {
+  const h = harness([job]); await settled();
+  await h.find('button', 'Edit this image').onclick();
+  h.confirm(false);
+  await h.nodes['cleanup-uploads'].onclick();
+  assert.equal(h.requests.some(r => r.options.method === 'DELETE'), false);
+  h.confirm(true);
+  await h.nodes['cleanup-uploads'].onclick();
+  assert.equal(h.requests.at(-1).url, `/api/uploads/unused?keep=${job.id}`);
+  assert.equal(h.requests.at(-1).options.method, 'DELETE');
+  assert.equal(h.nodes['source-preview'].src, `/images/${job.id}.png`);
+});
+
+
+test('notifications can be dismissed and ordinary messages expire without hiding later errors', async () => {
+  const h = harness([job]); await settled();
+  await h.nodes['reset-options'].onclick();
+  assert.equal(h.nodes['notification'].hidden, false);
+  assert.equal(h.nodes.notice.getAttribute('role'), 'status');
+  h.expireNotices();
+  assert.equal(h.nodes['notification'].hidden, true);
+  await h.nodes['reset-options'].onclick();
+  h.fail({error: 'Enter a prompt.', error_key: 'error_prompt', error_params: {}});
+  await h.nodes['generate-form'].onsubmit({preventDefault() {}});
+  assert.equal(h.nodes['notification'].hidden, false);
+  assert.equal(h.nodes.notice.getAttribute('role'), 'alert');
+  assert.equal(h.nodes['notification'].dataset.kind, 'error');
+  h.expireNotices();
+  assert.equal(h.nodes['notification'].hidden, false);
+  h.switchTo('ja');
+  assert.equal(h.nodes.notice.textContent, 'プロンプトを入力してください。');
+  assert.equal(h.nodes.notice.getAttribute('role'), 'alert');
+  await h.nodes['dismiss-notice'].onclick();
+  assert.equal(h.nodes['notification'].hidden, true);
+  assert.equal(h.nodes.notice.textContent, '');
 });

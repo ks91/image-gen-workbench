@@ -1,5 +1,9 @@
 from .i18n import UserError
 import json
+import io
+import os
+import shutil
+import tempfile
 import math
 import queue
 import secrets
@@ -11,6 +15,14 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from PIL import Image
+
+
+class StorageError(UserError):
+    status_code = 507
+
+
+class DeleteError(UserError):
+    status_code = 409
 
 
 class Cancelled(Exception):
@@ -53,18 +65,23 @@ def validate_spec(data):
 class Jobs:
     """One worker owns the model; SQLite is the durable job history."""
 
-    def __init__(self, directory, engine):
+    def __init__(self, directory, engine, max_storage_bytes=10 * 1024**3, min_free_bytes=1024**3, max_records=10000):
         self.root = Path(directory).resolve()
         self.images = self.root / 'images'
         self.images.mkdir(parents=True, exist_ok=True)
         self.db = self.root / 'history.sqlite3'
         self.engine = engine
         self.lock = threading.RLock()
+        self.max_storage_bytes = max_storage_bytes
+        self.min_free_bytes = min_free_bytes
+        self.max_records = max_records
+        self.reservations = {}
         self.events = {}
         self.queue = queue.Queue()
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, body TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY)')
+        self.recover_deletions()
         for job in self.list():
             if job['status'] in ('queued', 'running'):
                 self.update(job['id'], status='failed', phase='phase_failed', error_key='error_interrupted', error='The previous run was interrupted.')
@@ -124,26 +141,125 @@ class Jobs:
             raise KeyError(image_id)
         return path
 
+    def recover_deletions(self):
+        # A staged PNG is restored if its DB transaction did not commit; otherwise discard it.
+        for staged in self.images.glob('*.png.deleting'):
+            image_id = staged.name.removesuffix('.png.deleting')
+            if len(image_id) != 32 or any(c not in '0123456789abcdef' for c in image_id):
+                continue
+            with self.connect() as db:
+                exists = db.execute('SELECT id FROM jobs WHERE id=? UNION ALL SELECT id FROM uploads WHERE id=?',
+                                    (image_id, image_id)).fetchone()
+            if exists:
+                os.replace(staged, self.images / f'{image_id}.png')
+            else:
+                staged.unlink()
+
+    def _delete_records(self, ids, table):
+        # Caller holds self.lock; table is selected internally, never from a request.
+        staged = []
+        try:
+            with self.connect() as db:
+                for image_id in ids:
+                    original = self.images / f'{image_id}.png'
+                    if original.exists():
+                        temporary = self.images / f'{image_id}.png.deleting'
+                        os.replace(original, temporary)
+                        staged.append((original, temporary))
+                    db.execute(f'DELETE FROM {table} WHERE id=?', (image_id,))
+        except (OSError, sqlite3.Error):
+            for original, temporary in staged:
+                os.replace(temporary, original)
+            raise DeleteError('error_delete_failed') from None
+        try:
+            for _, temporary in staged:
+                temporary.unlink()
+        except OSError:
+            raise DeleteError('error_delete_cleanup') from None
+
+    def delete(self, job_id):
+        with self.lock:
+            job = self.get(job_id)
+            if job_id in self.events or job['status'] in ('queued', 'running'):
+                raise DeleteError('error_delete_active')
+            with self.connect() as db:
+                referenced = db.execute("SELECT 1 FROM jobs WHERE json_extract(body, '$.spec.source_id')=? LIMIT 1",
+                                        (job_id,)).fetchone()
+            if referenced:
+                raise DeleteError('error_delete_referenced')
+            self._delete_records([job_id], 'jobs')
+
+    def delete_unused_uploads(self, keep=None):
+        if keep is not None and (len(keep) != 32 or any(c not in '0123456789abcdef' for c in keep)):
+            raise UserError('error_source_id')
+        with self.lock:
+            with self.connect() as db:
+                ids = [row[0] for row in db.execute(
+                    "SELECT id FROM uploads WHERE id NOT IN "
+                    "(SELECT json_extract(body, '$.spec.source_id') FROM jobs "
+                    "WHERE json_extract(body, '$.spec.source_id') IS NOT NULL)")
+                       if row[0] != keep]
+            self._delete_records(ids, 'uploads')
+            return len(ids)
+
+    def check_storage(self, incoming=0, *, exclude=None, new_records=0):
+        # Call under self.lock so concurrent uploads and output saves share one budget.
+        paths = list(self.images.iterdir()) + list(self.root.glob('history.sqlite3*'))
+        used = sum(p.stat().st_size for p in paths if p.is_file())
+        reserved = sum(size for job_id, size in self.reservations.items() if job_id != exclude)
+        if used + reserved + incoming > self.max_storage_bytes:
+            raise StorageError('error_storage_limit')
+        if shutil.disk_usage(self.root).free < self.min_free_bytes + reserved + incoming:
+            raise StorageError('error_disk_space')
+        if new_records:
+            with self.connect() as db:
+                count = db.execute('SELECT (SELECT COUNT(*) FROM jobs) + (SELECT COUNT(*) FROM uploads)').fetchone()[0]
+            if count + new_records > self.max_records:
+                raise StorageError('error_record_limit')
+
+    def save_image(self, image, image_id, *, pnginfo=None, new_records=0):
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG', pnginfo=pnginfo)
+        payload = buffer.getvalue()
+        # Leave room for the associated SQLite update and its rollback journal.
+        self.check_storage(len(payload) + 256 * 1024, exclude=image_id, new_records=new_records)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=self.images, suffix='.tmp', delete=False) as output:
+                temporary = Path(output.name)
+                output.write(payload)
+            os.replace(temporary, self.images / f'{image_id}.png')
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
     def upload(self, image):
-        image_id = uuid.uuid4().hex
-        image.save(self.images / f'{image_id}.png')
-        with self.connect() as db:
-            db.execute('INSERT INTO uploads VALUES (?)', (image_id,))
-        return image_id
+        with self.lock:
+            image_id = uuid.uuid4().hex
+            self.save_image(image, image_id, new_records=1)
+            try:
+                with self.connect() as db:
+                    db.execute('INSERT INTO uploads VALUES (?)', (image_id,))
+            except Exception:
+                (self.images / f'{image_id}.png').unlink(missing_ok=True)
+                raise
+            return image_id
 
     def submit(self, data):
         spec = validate_spec(data)
         count = data.get('num_images', 1)
         if type(count) is not int or not 1 <= count <= 8:
             raise UserError('error_integer', field='num_images', low=1, high=8)
-        if spec['source_id']:
-            try:
-                self.image_path(spec['source_id'])
-            except KeyError:
-                raise UserError('error_source_missing') from None
         with self.lock:
-            if sum(not e.is_set() for e in self.events.values()) + count > 20:
+            if spec['source_id']:
+                try:
+                    self.image_path(spec['source_id'])
+                except KeyError:
+                    raise UserError('error_source_missing') from None
+            if len(self.events) + count > 20:
                 raise UserError('error_queue')
+            reservation = 5 * spec['width'] * spec['height'] + 1024**2
+            self.check_storage(count * reservation, new_records=count)
             batch_id = uuid.uuid4().hex
             batch = []
             for index in range(count):
@@ -159,6 +275,7 @@ class Jobs:
                 db.executemany('INSERT INTO jobs VALUES (?,?)',
                                [(job['id'], json.dumps(job, ensure_ascii=False)) for job in batch])
             for job in batch:
+                self.reservations[job['id']] = reservation
                 self.events[job['id']] = threading.Event()
                 self.queue.put(job['id'])
         # Preserve the original single-job response fields for existing clients.
@@ -197,7 +314,7 @@ class Jobs:
                     from PIL.PngImagePlugin import PngInfo
                     info = PngInfo()
                     info.add_text('generation', json.dumps(job['spec'], ensure_ascii=False))
-                    result.save(self.images / f'{job_id}.png', pnginfo=info)
+                    self.save_image(result, job_id, pnginfo=info)
                     self.update(job_id, status='succeeded', phase='phase_succeeded', progress=1,
                                 image_url=f'/images/{job_id}.png', elapsed=round(time.monotonic() - started, 2))
             except Cancelled:
@@ -208,6 +325,7 @@ class Jobs:
             finally:
                 with self.lock:
                     self.events.pop(job_id, None)
+                    self.reservations.pop(job_id, None)
                 self.queue.task_done()
 
     def close(self):

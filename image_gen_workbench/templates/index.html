@@ -4,13 +4,17 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Image Gen Workbench</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ctext y='32' font-size='36' fill='%23c9edaa'%3E◈%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=asset_versions['style.css']) }}">
   <script id="translations" type="application/json">{{ messages | tojson }}</script>
-  <script defer src="{{ url_for('static', filename='i18n.js') }}"></script>
-  <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='i18n.js', v=asset_versions['i18n.js']) }}"></script>
+  <script defer src="{{ url_for('static', filename='app.js', v=asset_versions['app.js']) }}"></script>
 </head>
 {% macro tr(key) -%}<span data-i18n="{{ key }}">{{ t(key) }}</span>{%- endmacro %}
 <body>
+<div id="notification" hidden>
+  <div id="notice" role="status" aria-live="polite" aria-atomic="true"></div>
+  <button id="dismiss-notice" type="button" data-i18n-aria-label="dismiss_notice" aria-label="{{ t('dismiss_notice') }}">×</button>
+</div>
 <header>
   <div><span class="mark">◈</span> <strong>Image Gen Workbench</strong><small>{{ tr('tagline') }}</small></div>
   <div class="header-controls"><span class="model">● {% if is_demo %}{{ tr('demo') }}{% else %}{{ engine }}{% endif %}</span>
@@ -39,10 +43,11 @@
       <label for="num_images">{{ tr('num_images') }}</label>
       <input id="num_images" type="number" min="1" max="8" value="1" required>
       <p class="hint">{{ tr('batch_hint') }}</p>
+      <button id="reset-options" class="text-button" type="button">{{ tr('reset_options') }}</button>
+      <p class="hint">{{ tr('reset_hint') }}</p>
       <button id="generate" class="primary" type="submit">{{ tr('generate') }} <span>↗</span></button>
       <p class="hint">{{ tr('loading_hint') }}</p>
     </form>
-    <div id="notice" role="status" aria-live="polite"></div>
   </aside>
   <section class="workspace">
     <div class="section-heading"><div><div class="eyebrow">YOUR EXPLORATIONS</div><h2>{{ tr('history') }} <span id="count">0</span></h2></div><label class="filter"><input id="favorites" type="checkbox"> {{ tr('favorites') }}</label></div>
@@ -54,6 +59,12 @@
       <button id="next-page" type="button" disabled>{{ tr('next_page') }}</button>
     </nav>
     <div id="history"></div>
+    <nav class="pagination pagination-bottom" data-i18n-aria-label="pagination" aria-label="{{ t('pagination') }}">
+      <button id="prev-page-bottom" type="button" disabled>{{ tr('previous_page') }}</button>
+      <span id="page-status-bottom"></span>
+      <button id="next-page-bottom" type="button" disabled>{{ tr('next_page') }}</button>
+    </nav>
+    <button id="cleanup-uploads" class="text-button" type="button">{{ tr('cleanup_uploads') }}</button>
   </section>
 </main>
 <dialog id="viewer"><button id="close-viewer" class="text-button">{{ tr('close') }}</button><img data-i18n-alt="viewer_alt" alt="{{ t('viewer_alt') }}"></dialog>

@@ -1,4 +1,6 @@
 import io
+import hashlib
+from pathlib import Path
 import tempfile
 import threading
 import time
@@ -53,6 +55,18 @@ class AppTests(unittest.TestCase):
         response = self.client.post('/api/uploads', data={'image': (data, 'sample.png')})
         self.assertEqual(response.status_code, 201)
         return response.json['id']
+
+    def test_notifications_precede_content_and_assets_have_content_versions(self):
+        html = self.client.get('/').get_data(as_text=True)
+        self.assertLess(html.index('id="notification"'), html.index('<header>'))
+        for name in ('style.css', 'i18n.js', 'app.js'):
+            content = (Path(self.app.static_folder) / name).read_bytes()
+            version = hashlib.sha256(content).hexdigest()[:16]
+            url = f'/static/{name}?v={version}'
+            self.assertIn(url, html)
+            with self.client.get(url) as response:
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data, content)
 
     def test_home_and_generation_persist_image_and_parameters(self):
         self.assertEqual(self.client.get('/').status_code, 200)

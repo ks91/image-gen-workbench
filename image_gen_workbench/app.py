@@ -1,6 +1,11 @@
 from .i18n import UserError, MESSAGES, language, translate, localize_job
+import hashlib
+from pathlib import Path
 import warnings
-from flask import Flask, jsonify, render_template, request, send_file
+import threading
+import time
+from collections import deque
+from flask import Flask, jsonify, render_template, request, send_file, g
 from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.exceptions import HTTPException
 
@@ -8,12 +13,17 @@ from .engine import QwenEngine
 from .jobs import Jobs
 
 
-def create_app(data_dir='data', engine=None):
+def create_app(data_dir='data', engine=None, **storage_limits):
     app = Flask(__name__)
     app.config.update(MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+                      WRITE_REQUESTS_PER_MINUTE=60, MAX_FORM_PARTS=10,
                       TRUSTED_HOSTS=['localhost', '127.0.0.1', '[::1]'])
-    jobs = Jobs(data_dir, engine or QwenEngine())
+    jobs = Jobs(data_dir, engine or QwenEngine(), **storage_limits)
     app.extensions['jobs'] = jobs
+    upload_slots = threading.BoundedSemaphore(2)
+    app.extensions['upload_slots'] = upload_slots
+    writes = deque()
+    rate_lock = threading.Lock()
 
     def error_response(key, http_status, **params):
         return jsonify(error=translate(key, language(), **params), error_key=key, error_params=params), http_status
@@ -25,19 +35,49 @@ def create_app(data_dir='data', engine=None):
     def content_language(response):
         response.headers['Content-Language'] = language()
         response.vary.update(['Cookie', 'Accept-Language'])
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+            "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+        response.headers['Cache-Control'] = 'no-store'
         return response
 
     @app.before_request
     def local_origin():
         if request.method in ('POST', 'PATCH', 'DELETE'):
             origin = request.headers.get('Origin')
-            if origin and origin != request.host_url.rstrip('/'):
+            if request.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and origin != request.host_url.rstrip('/')):
                 return error_response('error_origin', 403)
+
+            with rate_lock:
+                now = time.monotonic()
+                while writes and writes[0] <= now - 60:
+                    writes.popleft()
+                if len(writes) >= app.config['WRITE_REQUESTS_PER_MINUTE']:
+                    response, status = error_response('error_rate_limit', 429)
+                    response.headers['Retry-After'] = '60'
+                    return response, status
+                writes.append(now)
+        if request.endpoint == 'upload' and request.method == 'POST':
+            if not upload_slots.acquire(blocking=False):
+                response, status = error_response('error_upload_busy', 429)
+                response.headers['Retry-After'] = '2'
+                return response, status
+            g.upload_slot = True
+            with jobs.lock:
+                jobs.check_storage(new_records=1)
+
+    @app.teardown_request
+    def release_upload_slot(error):
+        if g.pop('upload_slot', False):
+            upload_slots.release()
 
     @app.errorhandler(ValueError)
     def invalid(exc):
         if isinstance(exc, UserError):
-            return error_response(exc.key, 400, **exc.params)
+            return error_response(exc.key, getattr(exc, 'status_code', 400), **exc.params)
         return error_response('error_bad_request', 400)
 
     @app.errorhandler(KeyError)
@@ -52,8 +92,10 @@ def create_app(data_dir='data', engine=None):
     @app.get('/')
     def home():
         lang = language()
+        asset_versions = {name: hashlib.sha256((Path(app.static_folder) / name).read_bytes()).hexdigest()[:16]
+                          for name in ('style.css', 'i18n.js', 'app.js')}
         return render_template('index.html', engine=jobs.engine.name, is_demo=jobs.engine.name.startswith('DEMO'),
-                               language=lang, messages=MESSAGES, t=lambda key: translate(key, lang))
+                               language=lang, messages=MESSAGES, asset_versions=asset_versions, t=lambda key: translate(key, lang))
 
     @app.get('/api/jobs')
     def history():
@@ -75,6 +117,15 @@ def create_app(data_dir='data', engine=None):
     @app.get('/api/jobs/<job_id>')
     def detail(job_id):
         return jsonify(present(jobs.get(job_id)))
+
+    @app.delete('/api/jobs/<job_id>')
+    def delete_job(job_id):
+        jobs.delete(job_id)
+        return jsonify(deleted=job_id)
+
+    @app.delete('/api/uploads/unused')
+    def delete_unused_uploads():
+        return jsonify(deleted=jobs.delete_unused_uploads(request.args.get('keep')))
 
     @app.post('/api/jobs/<job_id>/cancel')
     def cancel(job_id):
@@ -115,6 +166,9 @@ def create_app(data_dir='data', engine=None):
 
     @app.get('/images/<image_id>.png')
     def image(image_id):
-        return send_file(jobs.image_path(image_id), mimetype='image/png')
+        try:
+            return send_file(jobs.image_path(image_id), mimetype='image/png')
+        except FileNotFoundError:
+            raise KeyError(image_id) from None
 
     return app

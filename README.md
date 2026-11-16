@@ -80,13 +80,16 @@ Use the **Language / 言語** selector in the header to switch between **English
 
 Switching languages updates labels, history actions, progress, and application error messages immediately. Your prompt, negative prompt, selected source image, settings, comparison, and unsaved note drafts are preserved. Prompts and notes are never translated. Third-party model/library diagnostic messages and browser-native dialogs may use their own language. Command-line help and setup messages are in English.
 
+Notifications appear in the upper-right corner of the viewport, including when scrolled down. Errors remain until dismissed or replaced by a subsequent message; ordinary notifications disappear after eight seconds. Use the × button to dismiss either type.
+
 ## Workflow
 
 1. Enter a prompt, set **Number of images** (1–8), and select **Generate image**.
 2. Select **Reuse settings** to retain the seed and settings while experimenting with the prompt. Leave the seed blank to generate a new random seed, which is recorded in the history.
 3. Upload a source image or select **Edit this image** on a result. Describe the desired change, such as “change the background to sunset.” You can use the edited result as the source for another edit.
 4. Select **Compare** on up to two results to view them side by side. Use favorites and notes to track promising results and ideas.
-5. Select **Save PNG** to download an image. The PNG `generation` text metadata also contains the prompt and generation settings.
+5. Select **Reset generation options** to restore 1024 × 1024, 12 steps, CFG 1, a random seed, one image, and an empty negative prompt. Your main prompt and selected source image stay unchanged.
+6. Select **Save PNG** to download an image. The PNG `generation` text metadata also contains the prompt and generation settings.
 
 **Use a different seed when editing a generated image.** Qwen-Image-2.1 can produce an oversaturated, over-sharpened near-copy and ignore edits when the starting noise used to create the reference is replayed (same random generator, seed, and output dimensions). **Edit this image** therefore clears the seed field to request a new random seed. **Reuse settings** retains the recorded seed for repeatable experiments. When uploading a previously generated image or entering a seed manually, avoid its original generation seed. See the [Qwen report](https://github.com/QwenLM/Qwen-Image-2.1/issues/9) and [Diffusers investigation](https://github.com/huggingface/diffusers/issues/14824). Changing seeds addresses this particular failure mode, not every possible editing artifact.
 
@@ -109,6 +112,27 @@ History is displayed newest first, with **24 entries per page** and Previous/Nex
 - Job history: `data/history.sqlite3`
 - Uploaded and generated images: `data/images/`
 - Backups: stop the application and copy the entire `data/` directory.
+
+Use **Delete** on a finished, failed, or cancelled history card to permanently remove its PNG, settings, and notes after confirmation. Active jobs cannot be deleted until generation/cancellation finishes. An image used as the source of another history entry is protected: delete its dependent entries first. Derived images are never deleted implicitly. Deleting a selected image also clears it from the source preview and comparison panel. If a page becomes empty, the history returns to the last available page.
+
+**Delete unused uploads** removes uploaded source images that no history entry references, while keeping the currently selected source. It asks for confirmation and reports the number removed. Other open tabs may still hold selections of deleted uploads; re-upload them if needed. Cleanup works even when storage/record limits are reached. PNG disk space and record slots are reclaimed; SQLite may keep freed pages in its database file for reuse rather than immediately shrinking it. Interrupted deletions are reconciled on restart.
+
+Local resource safeguards apply across all browser tabs:
+
+- At most 20 outstanding images, including cancelled jobs until the worker drains them.
+- At most 60 write requests per rolling minute (generation, uploads, annotation, and cancellation combined); excess requests receive HTTP 429. Read-only browsing and polling do not count.
+- At most two uploads being processed concurrently; each request remains limited to 20 MiB and each image to 20 million pixels.
+- A default 10 GiB managed storage budget (images, history database and its journals), 1 GiB minimum free disk space, and 10,000 history/upload records combined. Queued outputs reserve a conservative storage allowance; actual capacity is checked again before saving. These are application safeguards, not an OS-level filesystem quota against unrelated processes.
+
+Adjust storage limits at startup, for example:
+
+```sh
+./run --max-storage-gb 50 --min-free-gb 2 --max-records 50000
+```
+
+When a limit is reached, new work is refused with a localized message (HTTP 507 for storage/record limits). Already queued generation can fail if disk space decreases before its output is saved. Existing images remain readable; nothing is automatically deleted. Delete unwanted entries and unused uploads from the UI, raise the limits, or, with the app stopped, archive the whole data directory and start with a fresh `--data-dir`. Avoid deleting individual files behind the history database.
+
+Responses disallow framing, restrict scripts and other resources to the app, disable MIME sniffing, omit referrer information, and request no browser caching. Cross-site write requests are rejected. Authentication and remote deployment remain out of scope: the server still binds only to loopback and uses the local Werkzeug server. Do not expose it directly to a network.
 
 Data is not deleted automatically. Inference runs on your computer; prompts and images are not sent to an external image-generation API. The server binds to loopback only. Only one server process can use a given data directory at a time.
 

@@ -6,15 +6,31 @@ const noteDrafts = new Map();
 const catalog = JSON.parse($('translations').textContent);
 let language = document.documentElement.lang;
 const t = (key, params = {}) => WorkbenchI18n.translate(catalog, language, key, params);
-let currentNotice = null;
+let currentNotice = null, noticeTimer = null;
 function showNotice() {
+  const isError = Boolean(currentNotice?.error);
+  $('notification').hidden = !currentNotice;
+  $('notification').dataset.kind = isError ? 'error' : 'status';
+  $('notice').setAttribute('role', isError ? 'alert' : 'status');
+  $('notice').setAttribute('aria-live', isError ? 'assertive' : 'polite');
   $('notice').textContent = currentNotice ? (currentNotice.key ? t(currentNotice.key, currentNotice.params) : currentNotice.message) : '';
 }
-function notice(key, params = {}) { currentNotice = key ? {key, params} : null; showNotice(); }
+function dismissNotice() {
+  clearTimeout(noticeTimer); noticeTimer = null;
+  currentNotice = null; showNotice();
+}
+function notice(key, params = {}) {
+  clearTimeout(noticeTimer); noticeTimer = null;
+  currentNotice = key ? {key, params} : null;
+  showNotice();
+  if (currentNotice) noticeTimer = setTimeout(dismissNotice, 8000);
+}
 function reportError(error) {
-  currentNotice = error.key ? {key: error.key, params: error.params} : {message: error.message};
+  clearTimeout(noticeTimer); noticeTimer = null;
+  currentNotice = error.key ? {key: error.key, params: error.params, error: true} : {message: error.message, error: true};
   showNotice();
 }
+$('dismiss-notice').onclick = dismissNotice;
 $('language').onchange = () => {
   const next = $('language').value;
   if (!WorkbenchI18n.persist(document, next)) return;
@@ -54,6 +70,19 @@ function setSource(id) {
   $('upload-label').textContent = t(id ? 'change_source' : 'upload');
 }
 $('clear-source').onclick = () => setSource(null);
+$('reset-options').onclick = () => {
+  const defaults = {width: 1024, height: 1024, steps: 12, cfg: 1, seed: '', num_images: 1, negative_prompt: ''};
+  for (const [key, value] of Object.entries(defaults)) $(key).value = value;
+  notice('options_reset');
+};
+$('cleanup-uploads').onclick = async () => {
+  if (!confirm(t('cleanup_confirm'))) return;
+  try {
+    const result = await api('/api/uploads/unused' + (sourceId ? `?keep=${sourceId}` : ''), {method: 'DELETE'});
+    notice('uploads_deleted', {count: result.deleted});
+  } catch (error) { reportError(error); }
+};
+
 $('upload').onchange = async event => {
   const file = event.target.files[0];
   if (!file) return;
@@ -98,16 +127,18 @@ function renderComparison() {
 function render() {
   const visible = jobs;
   $('count').textContent = String(total);
-  $('page-status').textContent = t('page_status', {page, pages, total});
-  $('prev-page').disabled = page <= 1;
-  $('next-page').disabled = page >= pages;
+  for (const suffix of ['', '-bottom']) {
+    $(`page-status${suffix}`).textContent = t('page_status', {page, pages, total});
+    $(`prev-page${suffix}`).disabled = page <= 1;
+    $(`next-page${suffix}`).disabled = page >= pages;
+  }
   $('empty').hidden = visible.length !== 0;
   $('history').replaceChildren();
   for (const job of visible) {
     const card = element('article', undefined, 'card');
     if (job.image_url) {
       const img = element('img', undefined, 'card-image'); img.src = job.image_url; img.alt = job.spec.prompt; img.loading = 'lazy';
-      img.onclick = () => { $('viewer').querySelector('img').src = job.image_url; $('viewer').showModal(); };
+      img.onclick = () => { $('viewer').dataset.jobId = job.id; $('viewer').querySelector('img').src = job.image_url; $('viewer').showModal(); };
       card.append(img);
     } else {
       const box = element('div', job.phase_key ? t(job.phase_key, job.phase_params) : job.phase, 'progress-box');
@@ -145,6 +176,18 @@ function render() {
       const download = element('a', t('download')); download.href = job.image_url; download.download = `qwen-${job.id}.png`; actions.append(download);
     }
     if (['queued', 'running'].includes(job.status)) actions.append(button(t('cancel'), async () => { await api(`/api/jobs/${job.id}/cancel`, {method: 'POST'}); await refresh(true); }));
+    if (!['queued', 'running'].includes(job.status)) actions.append(button(t('delete'), async () => {
+      if (!confirm(t('delete_confirm', {id: job.id.slice(0, 8)}))) return;
+      await api(`/api/jobs/${job.id}`, {method: 'DELETE'});
+      comparison = comparison.filter(item => item.id !== job.id);
+      noteDrafts.delete(job.id);
+      if (sourceId === job.id) setSource(null);
+      if ($('viewer').dataset.jobId === job.id) {
+        $('viewer').close(); $('viewer').querySelector('img').removeAttribute('src');
+      }
+      notice('deleted');
+      await refresh(true);
+    }));
     body.append(actions);
     const notes = element('textarea', undefined, 'notes'); notes.value = noteDrafts.get(job.id) ?? job.notes; notes.rows = 2; notes.maxLength = 4000; notes.placeholder = t('notes_hint'); notes.setAttribute('aria-label', t('notes_label'));
     notes.oninput = () => noteDrafts.set(job.id, notes.value);
@@ -181,8 +224,10 @@ async function changePage(next) {
   try { await refresh(true); }
   catch (error) { page = previous; reportError(error); render(); }
 }
-$('prev-page').onclick = () => changePage(Math.max(1, page - 1));
-$('next-page').onclick = () => changePage(Math.min(pages, page + 1));
+for (const suffix of ['', '-bottom']) {
+  $(`prev-page${suffix}`).onclick = () => changePage(Math.max(1, page - 1));
+  $(`next-page${suffix}`).onclick = () => changePage(Math.min(pages, page + 1));
+}
 $('favorites').onchange = () => changePage(1);
 $('clear-compare').onclick = () => { comparison = []; render(); };
 $('close-viewer').onclick = () => $('viewer').close();
