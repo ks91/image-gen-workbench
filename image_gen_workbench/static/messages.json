@@ -114,7 +114,10 @@
     "include_prompt": "Include prompt and generation settings in PNG",
     "include_prompt_hint": "Turn off to remove all metadata from downloaded PNGs. Images and settings stored in your history are kept unchanged.",
     "settings_scope": "Changes apply immediately and are remembered in this browser for this site.",
-    "settings_storage_warning": "This browser could not save your preference. It applies only until this page is reloaded."
+    "settings_storage_warning": "This browser could not save your preference. It applies only until this page is reloaded.",
+    "compare_source": "Compare with source",
+    "source_image": "Source image",
+    "edited_image": "Edited image"
   },
   "ja": {
     "tagline": "試して、比べて、イメージに近づける。",
@@ -231,6 +234,9 @@
     "include_prompt": "PNG にプロンプトと生成設定を含める",
     "include_prompt_hint": "オフにすると、保存する PNG からすべてのメタデータを除去します。履歴内の画像と生成設定は変更しません。",
     "settings_scope": "変更はすぐに反映され、このブラウザのこのサイト用の設定として保存されます。",
-    "settings_storage_warning": "ブラウザに設定を保存できませんでした。今回の変更はページを再読み込みするまで有効です。"
+    "settings_storage_warning": "ブラウザに設定を保存できませんでした。今回の変更はページを再読み込みするまで有効です。",
+    "compare_source": "元画像と比較",
+    "source_image": "元画像",
+    "edited_image": "編集結果"
   }
 }

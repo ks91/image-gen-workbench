@@ -33,6 +33,7 @@ function harness(initialJobs, respond = null, storage = new Map()) {
     getAttribute(key) { return this.attrs[key]; }
     removeAttribute(key) { delete this.attrs[key]; delete this[key]; }
     focus() { doc.activeElement = this; }
+    scrollIntoView() { this.scrolledIntoView = true; }
     showModal() { this.open = true; }
     close() { this.open = false; }
     get classList() { return {contains: name => this.className.split(' ').includes(name)}; }
@@ -345,5 +346,39 @@ test('invalid or unavailable preference storage leaves settings usable', async (
     if (!(storage instanceof Map)) {
       assert.equal(h.nodes['settings-storage-warning'].hidden, false);
     }
+  }
+});
+
+
+test('compare with source shows the actual source and result without changing editing inputs', async () => {
+  const source = 'b'.repeat(32);
+  const edited = {...job, spec: {...job.spec, source_id: source}};
+  // The source may be an upload or a job on another page: neither is in this page.
+  const h = harness([edited]); await settled();
+  h.nodes.prompt.value = 'Unsubmitted edit';
+  h.nodes.seed.value = '123';
+  await h.find('button', 'Compare with source').onclick();
+  assert.equal(h.nodes.compare.hidden, false);
+  assert.equal(h.nodes.compare.scrolledIntoView, true);
+  const figures = h.nodes['compare-images'].children;
+  assert.equal(figures.length, 2);
+  assert.equal(figures[0].children.find(n => n.tagName === 'img').src, `/images/${source}.png`);
+  assert.equal(figures[1].children.find(n => n.tagName === 'img').src, job.image_url);
+  assert.ok(h.descendants(figures[0]).some(n => n.textContent === 'Source image'));
+  assert.ok(h.descendants(figures[1]).some(n => n.textContent === 'Edited image'));
+  assert.equal(h.nodes.prompt.value, 'Unsubmitted edit');
+  assert.equal(h.nodes.seed.value, '123');
+  h.switchTo('ja');
+  assert.ok(h.descendants(h.nodes['compare-images']).some(n => n.textContent === '元画像'));
+  assert.ok(h.descendants(h.nodes['compare-images']).some(n => n.textContent === '編集結果'));
+  assert.ok(h.find('button', '元画像と比較'));
+  await h.nodes['clear-compare'].onclick();
+  assert.equal(h.nodes.compare.hidden, true);
+});
+
+test('source comparison is unavailable without a source or finished image', async () => {
+  for (const item of [job, {...job, status: 'failed', image_url: null, spec: {...job.spec, source_id: 'b'.repeat(32)}}]) {
+    const h = harness([item]); await settled();
+    assert.equal(h.find('button', 'Compare with source'), undefined);
   }
 });

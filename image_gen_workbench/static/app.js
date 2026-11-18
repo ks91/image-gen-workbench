@@ -138,8 +138,10 @@ function renderComparison() {
   $('compare-images').replaceChildren();
   for (const job of comparison) {
     const figure = element('figure');
-    const img = element('img'); img.src = job.image_url; img.alt = job.spec.prompt;
-    figure.append(img, element('p', job.spec.prompt), element('p', `seed ${job.spec.seed} · ${t('step_count', {steps: job.spec.steps})} · CFG ${job.spec.cfg}`, 'metadata'));
+    if (job.comparisonLabel) figure.append(element('figcaption', t(job.comparisonLabel)));
+    const img = element('img'); img.src = job.image_url; img.alt = job.spec?.prompt ?? t('source_image');
+    figure.append(img);
+    if (job.spec) figure.append(element('p', job.spec.prompt), element('p', `seed ${job.spec.seed} · ${t('step_count', {steps: job.spec.steps})} · CFG ${job.spec.cfg}`, 'metadata'));
     $('compare-images').append(figure);
   }
 }
@@ -192,6 +194,14 @@ function render() {
           else { if (comparison.length === 2) comparison.shift(); comparison.push(job); }
           render();
         }));
+      if (job.spec.source_id) actions.append(button(t('compare_source'), () => {
+        comparison = [
+          {id: job.spec.source_id, image_url: `/images/${job.spec.source_id}.png`, comparisonLabel: 'source_image'},
+          {...job, comparisonLabel: 'edited_image'}
+        ];
+        render();
+        $('compare').scrollIntoView({block: 'start', behavior: 'smooth'});
+      }));
       const download = element('a', t('download'));
       download.href = job.image_url + (includePrompt ? '' : '?metadata=0');
       download.download = `qwen-${job.id}${includePrompt ? '' : '-clean'}.png`;
